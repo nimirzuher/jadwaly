@@ -73,6 +73,12 @@
   .ad-note{font-size:10px;opacity:.8;}
   [data-ad-position="homeTop"].ad-placeholder{min-height:70px;}
   [data-ad-position="homeContent"].ad-placeholder{min-height:80px;}
+  .ad-live{display:flex;justify-content:center;overflow:hidden;}
+  [data-ad-position="mobileSticky"]{display:none;}
+  @media (max-width:860px){
+    [data-ad-position="homeTop"]{display:none;}
+    [data-ad-position="mobileSticky"]{display:flex;}
+  }
   .sidebar .ad-slot{margin:14px 0 0;}
   .sidebar .ad-placeholder{min-height:180px;background:repeating-linear-gradient(45deg,#1B2444,#1B2444 8px,#212B4E 8px,#212B4E 16px);border-color:#3A4470;color:#8A93BE;}
   @media (max-width:860px){
@@ -335,7 +341,9 @@ function freshState(){
     teachers:[],
     sections:[],
     requirements:[],
-    timetable:null // {entries:[], unassigned:[], score:{}}
+    timetable:null, // {entries:[], unassigned:[], score:{}}
+    yardDuty:{ perBreak:2, excludedTeacherIds:[], breakPeriodIds:[], roster:[] },
+    substituteLog:[]
   };
 }
 
@@ -348,10 +356,16 @@ async function loadState(){
   try{
     if(window.storage){
       const res = await window.storage.get(STORAGE_KEY, false);
-      if(res && res.value){ state = JSON.parse(res.value); return; }
+      if(res && res.value){ state = JSON.parse(res.value); migrateState(); return; }
     }
   }catch(e){ /* no saved project yet, or storage unavailable — start fresh */ }
   state = freshState();
+}
+
+function migrateState(){
+  if(!state.yardDuty) state.yardDuty = { perBreak:2, excludedTeacherIds:[], breakPeriodIds:[], roster:[] };
+  if(!state.substituteLog) state.substituteLog = [];
+  (state.teachers||[]).forEach(t=>{ if(!t.unavailable) t.unavailable=[]; if(!t.preferred) t.preferred=[]; });
 }
 
 function scheduleSave(){
@@ -393,6 +407,41 @@ function showModal(html){
   document.getElementById('modalOverlay').style.display='flex';
 }
 function closeModal(){ document.getElementById('modalOverlay').style.display='none'; }
+
+function openUnavailableModal(teacherId, onSaved){
+  const t = state.teachers.find(x=>x.id===teacherId);
+  if(!t) return;
+  const lessonPeriodIds = state.periods.filter(p=>p.type==='lesson').map(p=>p.id);
+  const currentlyOff = new Set(state.days.filter(d=>{
+    const setForDay = new Set((t.unavailable||[]).filter(u=>u.dayId===d.id).map(u=>u.periodId));
+    return lessonPeriodIds.length>0 && lessonPeriodIds.every(pid=> setForDay.has(pid));
+  }).map(d=>d.id));
+
+  showModal(`
+    <h3>أيام غياب ${esc(t.name)}</h3>
+    <p>اختر الأيام التي لا يتوفر فيها هذا المعلم إطلاقاً — لن يضعه محرك الجدولة في أي حصة خلالها.</p>
+    <div class="chip-list" id="offDayChips" style="margin-bottom:16px">
+      ${state.days.map(d=>`<label class="chip" style="cursor:pointer">
+        <input type="checkbox" value="${d.id}" ${currentlyOff.has(d.id)?'checked':''} style="margin:0"> ${esc(d.name)}
+      </label>`).join('')}
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost btn-sm" id="mCancelOff">إلغاء</button>
+      <button class="btn btn-primary btn-sm" id="mSaveOff">حفظ</button>
+    </div>
+  `);
+  document.getElementById('mCancelOff').addEventListener('click', closeModal);
+  document.getElementById('mSaveOff').addEventListener('click', ()=>{
+    const chosen = [...document.querySelectorAll('#offDayChips input:checked')].map(cb=>cb.value);
+    const rebuilt = [];
+    chosen.forEach(dayId=>{ lessonPeriodIds.forEach(pid=> rebuilt.push({dayId, periodId:pid})); });
+    t.unavailable = rebuilt;
+    scheduleSave();
+    closeModal();
+    if(onSaved) onSaved();
+    toast('تم تحديث أيام الغياب.');
+  });
+}
 
 /* ================= SCHEDULING ENGINE =================
    1) Build lesson units from requirements
@@ -753,6 +802,8 @@ const STEPS = [
   {id:'requirements', label:'متطلبات المواد'},
   {id:'generate', label:'توليد الجدول'},
   {id:'timetable', label:'الجدول الأسبوعي'},
+  {id:'yard', label:'مراقبة الساحة'},
+  {id:'substitutes', label:'سد الشواغر'},
 ];
 
 function render(){
@@ -768,7 +819,7 @@ function render(){
           <div class="step-num">${i===0?'★':i}</div>
           <div>${s.label}</div>
         </div>`).join('')}
-      <div class="sidebar-foot">desgined by nimir alshbly.</div>
+      <div class="sidebar-foot">نموذج أولي محلي — البيانات محفوظة في متصفحك فقط.</div>
       ${renderAdSlot('sidebar','إعلان — الشريط الجانبي')}
     </div>
     <div class="main">
@@ -786,6 +837,7 @@ function render(){
   document.querySelectorAll('.step').forEach(el=>{
     el.addEventListener('click', ()=>{ ui.step = el.dataset.step; render(); });
   });
+  mountAdSlots();
   renderStep();
 }
 
@@ -799,37 +851,41 @@ function renderStep(){
   const c = document.getElementById('content');
   const map = { home:renderHome, school:renderSchool, days:renderDays, subjects:renderSubjects,
     teachers:renderTeachers, sections:renderSections, requirements:renderRequirements,
-    generate:renderGenerate, timetable:renderTimetable };
+    generate:renderGenerate, timetable:renderTimetable, yard:renderYard, substitutes:renderSubstitutes };
   c.innerHTML = '';
   (map[ui.step]||renderHome)(c);
 }
 
 /* =========================================================
-   ADVERTISING — provider-agnostic, swappable at launch.
-   Fill AD_CONFIG.client with your approved AdSense publisher ID
-   (or another network's equivalent) and set enabled:true to go live.
-   Until then, slots render a clearly-labeled placeholder so layout
-   and spacing can be reviewed before real ads are wired in.
-   Ad slots are excluded from print and from PDF/CSV export by design.
+   ADVERTISING — live Adsterra units + network scripts.
+   Banner units (atOptions/invoke.js) are mounted inside a same-origin
+   sandboxed <iframe srcdoc="..."> per slot — this keeps the ad network's
+   own document.write() calls isolated inside that iframe's document
+   instead of touching our single-page app's DOM (which gets replaced
+   on every navigation and would otherwise conflict with document.write).
+   Slots stay excluded from print and from PDF/CSV export.
    ========================================================= */
 const AD_CONFIG = {
-  enabled: true,           // flip to true once an ad network is approved & script is loaded
-  provider: 'adsense',      // 'adsense' | 'custom'
-  client: 'adstera',                // e.g. 'ca-pub-XXXXXXXXXXXXXXXX'
-  slots: {
-    homeTop:     { id:'adstera', format:'auto' },
-    homeContent: { id:'', format:'auto' },
-    sidebar:     { id:'', format:'auto' },
-    mobileSticky:{ id:'', format:'auto' }
-  }
+  enabled: true,
+  provider: 'adsterra',
+  units: {
+    homeTop:      { key:'e099c9500ea09fe642192b289005b66c', width:728, height:90 },  // desktop leaderboard
+    mobileSticky: { key:'377a4548bd84971a4f32052b7c38e14b', width:320, height:50 },   // mobile banner
+    sidebar:      { key:'a2a3c6c87d1b2ab2b126dad2deac10af', width:160, height:600 }   // desktop skyscraper
+  },
+  // Site-wide network scripts (self-mounting formats) — loaded once at startup, not tied to a slot.
+  networkScripts: [
+    'https://pl30796563.effectivecpmnetwork.com/08/11/1d/08111d43250ff021d0490fef7fbbd96b.js',
+    'https://pl30796565.effectivecpmnetwork.com/1b/32/1f/1b321f7bf0fa9047d7674ad65f494f52.js'
+  ]
 };
 
 function renderAdSlot(position, label){
-    return `<div class="ad-slot no-print" data-ad-position="${position}">
-        <iframe src="https://www.highperformanceformat.com/watch?key=e099c9500ea09fe642192b289005b66c" width="728" height="90" frameborder="0" scrolling="no"></iframe>
-    </div>`;
-}
-  // Placeholder (default): shows where the ad will sit without calling any external network.
+  const unit = AD_CONFIG.units[position];
+  if(AD_CONFIG.enabled && unit){
+    return `<div class="ad-slot ad-live no-print" data-ad-position="${position}" data-ad-key="${esc(unit.key)}" data-ad-w="${unit.width}" data-ad-h="${unit.height}"></div>`;
+  }
+  // Placeholder for slots without a live unit configured yet.
   return `<div class="ad-slot ad-placeholder no-print" data-ad-position="${position}">
     <span class="ad-tag">مساحة إعلانية</span>
     <span class="ad-note">${esc(label||'')}</span>
@@ -837,8 +893,30 @@ function renderAdSlot(position, label){
 }
 
 function mountAdSlots(){
-  document.querySelectorAll('.ad-slot ins.adsbygoogle').forEach(()=>{
-    try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){ /* slot already initialized */ }
+  document.querySelectorAll('.ad-slot.ad-live').forEach(el=>{
+    if(el.dataset.mounted) return;
+    el.dataset.mounted = '1';
+    const key = el.dataset.adKey, w = parseInt(el.dataset.adW), h = parseInt(el.dataset.adH);
+    const iframe = document.createElement('iframe');
+    iframe.width = w; iframe.height = h;
+    iframe.style.border = '0'; iframe.style.overflow = 'hidden'; iframe.scrolling = 'no';
+    iframe.title = 'إعلان';
+    iframe.srcdoc =
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;overflow:hidden}</style></head><body>'
+      + '<script>atOptions=' + JSON.stringify({key:key, format:'iframe', height:h, width:w, params:{}}) + ';<\/script>'
+      + '<script src="https://www.highperformanceformat.com/' + key + '/invoke.js"><\/script>'
+      + '</body></html>';
+    el.appendChild(iframe);
+  });
+}
+
+function loadGlobalAdNetworkScripts(){
+  if(!AD_CONFIG.enabled) return;
+  (AD_CONFIG.networkScripts||[]).forEach(src=>{
+    if(document.querySelector(`script[src="${src}"]`)) return;
+    const s = document.createElement('script');
+    s.src = src; s.async = true;
+    document.body.appendChild(s);
   });
 }
 
@@ -846,6 +924,7 @@ function mountAdSlots(){
 function renderHome(c){
   c.innerHTML = `
     ${renderAdSlot('homeTop','إعلان — أعلى الصفحة')}
+    ${renderAdSlot('mobileSticky','إعلان — نسخة الجوال')}
     <div class="hero">
       <div class="hero-grid"></div>
       <h1>أنشئ جدول مدرستك تلقائياً خلال دقائق</h1>
@@ -860,7 +939,6 @@ function renderHome(c){
       <div class="panel"><h2 style="font-size:15px">محرك جدولة حقيقي</h2><p class="sub" style="margin:0">خوارزمية قيود صلبة + بحث محلي لتحسين توزيع الحصص، وليست عشوائية.</p></div>
       <div class="panel"><h2 style="font-size:15px">تعديل وطباعة</h2><p class="sub" style="margin:0">عدّل الجدول يدوياً بسحب الحصص، ثم اطبعه أو صدّره إلى Excel.</p></div>
     </div>
-    ${renderAdSlot('homeContent','إعلان — ضمن المحتوى')}
   `;
   c.querySelector('#btnStart').addEventListener('click', ()=>{ ui.step='school'; render(); });
   c.querySelector('#btnDemo').addEventListener('click', loadDemoData);
@@ -1071,16 +1149,29 @@ function renderTeachers(c){
   }
 
   const tt = c.querySelector('#teacherTable');
+  function fullyUnavailableDayIds(t){
+    const lessonPeriodIds = state.periods.filter(p=>p.type==='lesson').map(p=>p.id);
+    if(lessonPeriodIds.length===0) return [];
+    return state.days.filter(d=>{
+      const setForDay = new Set((t.unavailable||[]).filter(u=>u.dayId===d.id).map(u=>u.periodId));
+      return lessonPeriodIds.every(pid=> setForDay.has(pid));
+    }).map(d=>d.id);
+  }
   function drawTeachers(){
-    tt.innerHTML = `<tr><th>الاسم</th><th>المواد</th><th>الحد اليومي</th><th></th></tr>` +
+    tt.innerHTML = `<tr><th>الاسم</th><th>المواد</th><th>الحد اليومي</th><th>أيام الغياب</th><th></th></tr>` +
       state.teachers.map(t=>{
         const subNames = t.subjectIds.map(id=> state.subjects.find(s=>s.id===id)?.name).filter(Boolean).join('، ');
+        const offDayIds = fullyUnavailableDayIds(t);
+        const offNames = offDayIds.map(id=> state.days.find(d=>d.id===id)?.name).filter(Boolean).join('، ');
         return `<tr><td>${esc(t.name)}</td><td>${esc(subNames)||'—'}</td><td class="mono">${t.maxDaily}</td>
+          <td>${offNames ? `<span style="color:var(--danger);font-size:12px">${esc(offNames)}</span>` : `<span style="color:var(--ink-soft);font-size:12px">متاح كل الأيام</span>`}
+              <button class="icon-btn editOff" data-id="${t.id}" style="margin-right:4px">تعديل</button></td>
           <td><button class="icon-btn del" data-id="${t.id}">حذف</button></td></tr>`;
-      }).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:16px">لا يوجد معلمون بعد.</td></tr>`;
+      }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:16px">لا يوجد معلمون بعد.</td></tr>`;
     tt.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
       state.teachers = state.teachers.filter(t=>t.id!==e.target.dataset.id); scheduleSave(); drawTeachers();
     }));
+    tt.querySelectorAll('.editOff').forEach(b=> b.addEventListener('click', e=> openUnavailableModal(e.target.dataset.id, drawTeachers)));
   }
   drawTeachers();
 
@@ -1310,6 +1401,12 @@ function renderTimetable(c){
       <div class="hint-box">${ui.ttView==='school'
         ? 'هذا عرض لجداول جميع الشعب مجتمعة، مخصص للمراجعة والطباعة. للتعديل اليدوي، افتح "حسب الشعبة" أو "حسب المعلم".'
         : 'اضغط على أي حصة لتحديدها، ثم اضغط على خانة أخرى لمبادلة الحصتين. سيتم التحقق من التعارضات تلقائياً.'}</div>
+      ${ui.ttView!=='school' && ui.selectedCell ? `
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-ghost btn-sm" id="nudgeEarlier">◀ تقديم الحصة</button>
+          <button class="btn btn-ghost btn-sm" id="nudgeLater">تأخير الحصة ▶</button>
+          <button class="btn btn-ghost btn-sm" id="clearSel">إلغاء التحديد</button>
+        </div>` : ''}
     </div>
     <div class="panel" style="padding-top:0">
       <div class="print-only">
@@ -1343,6 +1440,13 @@ function renderTimetable(c){
 
   if(ui.ttView==='school') drawSchoolGrid(c.querySelector('#ttWrap'));
   else drawGrid(c.querySelector('#ttWrap'));
+
+  const nudgeE = c.querySelector('#nudgeEarlier');
+  if(nudgeE) nudgeE.addEventListener('click', ()=> nudgeSelected(-1));
+  const nudgeL = c.querySelector('#nudgeLater');
+  if(nudgeL) nudgeL.addEventListener('click', ()=> nudgeSelected(1));
+  const clearSel = c.querySelector('#clearSel');
+  if(clearSel) clearSel.addEventListener('click', ()=>{ ui.selectedCell=null; renderStep(); });
 
   c.querySelector('#printBtn').addEventListener('click', ()=>{
     if(ui.ttView==='school') applyPrintFit();
@@ -1427,6 +1531,23 @@ function drawSchoolGrid(wrap){
   });
   html += `</tbody></table>`;
   wrap.innerHTML = html;
+}
+
+function adjacentLessonPeriodId(periodId, direction){
+  const lessonIds = state.periods.filter(p=>p.type==='lesson').map(p=>p.id);
+  const idx = lessonIds.indexOf(periodId);
+  if(idx===-1) return null;
+  const newIdx = idx + direction;
+  if(newIdx<0 || newIdx>=lessonIds.length) return null;
+  return lessonIds[newIdx];
+}
+
+function nudgeSelected(direction){
+  if(!ui.selectedCell) return;
+  const [dayId, periodId] = ui.selectedCell.split('::');
+  const targetPeriodId = adjacentLessonPeriodId(periodId, direction);
+  if(!targetPeriodId){ toast(direction<0 ? 'هذه أول حصة في اليوم — لا يمكن التقديم أكثر.' : 'هذه آخر حصة في اليوم — لا يمكن التأخير أكثر.'); return; }
+  attemptSwap(ui.selectedCell, dayId+'::'+targetPeriodId);
 }
 
 function onCellClick(cellId){
@@ -1541,6 +1662,211 @@ function exportCSV(){
 
 function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
+/* ================= YARD / PLAYGROUND SUPERVISION =================
+   Rotates non-excluded teachers across break periods each day so
+   supervision is spread fairly, favoring teachers with fewer
+   assignments so far and avoiding double-booking a teacher on
+   two different breaks in the same day. */
+function generateYardDuty(){
+  const breakPeriods = state.periods.filter(p=>p.type==='break' && state.yardDuty.breakPeriodIds.includes(p.id));
+  const eligible = state.teachers.filter(t=> !state.yardDuty.excludedTeacherIds.includes(t.id));
+  const per = Math.max(1, parseInt(state.yardDuty.perBreak)||1);
+  const loadCount = {}; // teacherId -> total assignments so far
+  eligible.forEach(t=> loadCount[t.id]=0);
+
+  const roster = [];
+  state.days.forEach(day=>{
+    const usedToday = new Set();
+    breakPeriods.forEach(period=>{
+      const candidates = eligible
+        .filter(t=> !usedToday.has(t.id))
+        .sort((a,b)=> (loadCount[a.id]-loadCount[b.id]) || (Math.random()-0.5));
+      const picked = candidates.slice(0, Math.min(per, candidates.length));
+      picked.forEach(t=>{ loadCount[t.id]++; usedToday.add(t.id); });
+      roster.push({ dayId:day.id, periodId:period.id, teacherIds:picked.map(t=>t.id) });
+    });
+  });
+  state.yardDuty.roster = roster;
+  scheduleSave();
+}
+
+function renderYard(c){
+  const breakPeriods = state.periods.filter(p=>p.type==='break');
+  if(breakPeriods.length===0 || state.teachers.length===0){
+    c.innerHTML = `<div class="panel"><div class="empty">أضف فسحاً في خطوة "الأيام والحصص" ومعلمين أولاً.</div></div>`;
+    return;
+  }
+  c.innerHTML = `
+    <div class="panel">
+      <h2>جدول مراقبة الساحة</h2>
+      <p class="sub">وزّع مجموعة من المعلمين على الفسح كل يوم بالتناوب العادل، مع استثناء من تريد.</p>
+      <div class="field"><label>الفسح المطلوب مراقبتها</label>
+        <div class="chip-list" id="breakPicker">
+          ${breakPeriods.map(p=>`<label class="chip" style="cursor:pointer">
+            <input type="checkbox" value="${p.id}" ${state.yardDuty.breakPeriodIds.includes(p.id)?'checked':''} style="margin:0">
+            ${esc(p.label)} (${esc(p.start)}–${esc(p.end)})
+          </label>`).join('')}
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>عدد المراقبين لكل فسحة</label><input type="number" id="perBreak" value="${state.yardDuty.perBreak}" min="1" max="10"></div>
+        <div class="field"><label>معلمون مستثنون من المراقبة</label>
+          <div class="chip-list" id="exclPicker">
+            ${state.teachers.map(t=>`<label class="chip" style="cursor:pointer">
+              <input type="checkbox" value="${t.id}" ${state.yardDuty.excludedTeacherIds.includes(t.id)?'checked':''} style="margin:0"> ${esc(t.name)}
+            </label>`).join('')}
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-accent" id="genYard">⚙ توليد جدول المراقبة</button>
+    </div>
+    <div class="panel" id="yardResultPanel"></div>
+  `;
+  c.querySelector('#genYard').addEventListener('click', ()=>{
+    state.yardDuty.breakPeriodIds = [...c.querySelectorAll('#breakPicker input:checked')].map(cb=>cb.value);
+    state.yardDuty.perBreak = parseInt(c.querySelector('#perBreak').value)||1;
+    state.yardDuty.excludedTeacherIds = [...c.querySelectorAll('#exclPicker input:checked')].map(cb=>cb.value);
+    if(state.yardDuty.breakPeriodIds.length===0){ toast('اختر فسحة واحدة على الأقل.'); return; }
+    generateYardDuty();
+    drawYardResult();
+    toast('تم توليد جدول المراقبة.');
+  });
+  function drawYardResult(){
+    const panel = c.querySelector('#yardResultPanel');
+    if(!state.yardDuty.roster.length){ panel.innerHTML=''; return; }
+    const breaksUsed = state.periods.filter(p=> state.yardDuty.breakPeriodIds.includes(p.id));
+    panel.innerHTML = `
+      <h2 style="font-size:15px">الجدول الأسبوعي للمراقبة</h2>
+      <div class="tt-wrap"><table class="tt"><thead><tr><th>اليوم</th>${breaksUsed.map(p=>`<th>${esc(p.label)}</th>`).join('')}</tr></thead><tbody>
+        ${state.days.map(d=>`<tr><td class="period-col"><span class="num">${esc(d.name)}</span></td>
+          ${breaksUsed.map(p=>{
+            const entry = state.yardDuty.roster.find(r=>r.dayId===d.id && r.periodId===p.id);
+            const names = (entry?entry.teacherIds:[]).map(id=> state.teachers.find(t=>t.id===id)?.name).filter(Boolean);
+            return `<td><div class="cell-lesson-plain">${names.map(esc).join('<br>')||'—'}</div></td>`;
+          }).join('')}
+        </tr>`).join('')}
+      </tbody></table></div>
+      <div style="margin-top:12px" class="no-print"><button class="btn btn-ghost btn-sm" id="printYard">🖨 طباعة</button></div>
+    `;
+    const pb = c.querySelector('#printYard');
+    if(pb) pb.addEventListener('click', ()=> window.print());
+  }
+  drawYardResult();
+}
+
+/* ================= SUBSTITUTE COVERAGE (سد الشواغر) =================
+   For an absent teacher on a given day, ranks available substitutes for
+   each of that teacher's lessons: same subject/specialization first,
+   then teachers under their daily cap, then lowest current weekly load. */
+function getSubstituteCandidates(absentTeacherId, dayId, periodId, subjectId){
+  const entries = state.timetable ? state.timetable.entries : [];
+  const busyTeacherIds = new Set(entries.filter(e=> e.dayId===dayId && e.periodId===periodId).map(e=>e.teacherId));
+  const loadByTeacher = {};
+  state.teachers.forEach(t=> loadByTeacher[t.id] = entries.filter(e=>e.teacherId===t.id).length);
+
+  return state.teachers
+    .filter(t=> t.id!==absentTeacherId && !busyTeacherIds.has(t.id) && !teacherUnavailable(t, dayId, periodId))
+    .map(t=>{
+      const sameSubject = t.subjectIds.includes(subjectId);
+      const dailyCount = entries.filter(e=>e.teacherId===t.id && e.dayId===dayId).length;
+      const underCap = dailyCount < (parseInt(t.maxDaily)||8);
+      return { teacher:t, sameSubject, underCap, load:loadByTeacher[t.id]||0 };
+    })
+    .sort((a,b)=>{
+      if(a.sameSubject!==b.sameSubject) return a.sameSubject? -1:1;
+      if(a.underCap!==b.underCap) return a.underCap? -1:1;
+      return a.load-b.load;
+    });
+}
+
+function renderSubstitutes(c){
+  if(!state.timetable){
+    c.innerHTML = `<div class="panel"><div class="empty">وّلد الجدول الأسبوعي أولاً لتتمكن من اقتراح بدلاء.</div></div>`;
+    return;
+  }
+  if(!ui.subAbsentId && state.teachers[0]) ui.subAbsentId = state.teachers[0].id;
+  if(!ui.subDayId && state.days[0]) ui.subDayId = state.days[0].id;
+
+  c.innerHTML = `
+    <div class="panel">
+      <h2>سد الشواغر — تغطية غياب معلم</h2>
+      <p class="sub">اختر المعلم الغائب واليوم، وسيقترح النظام أفضل البدلاء المتاحين لكل حصة من حصصه في ذلك اليوم.</p>
+      <div class="grid2">
+        <div class="field"><label>المعلم الغائب</label><select id="subTeacher">${state.teachers.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>اليوم</label><select id="subDay">${state.days.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></div>
+      </div>
+    </div>
+    <div class="panel" id="subResult"></div>
+    <div class="panel" id="subLog"></div>
+  `;
+  const teacherSel = c.querySelector('#subTeacher'); teacherSel.value = ui.subAbsentId;
+  const daySel = c.querySelector('#subDay'); daySel.value = ui.subDayId;
+  teacherSel.addEventListener('change', e=>{ ui.subAbsentId=e.target.value; drawSubResult(); });
+  daySel.addEventListener('change', e=>{ ui.subDayId=e.target.value; drawSubResult(); });
+
+  function drawSubResult(){
+    const panel = c.querySelector('#subResult');
+    const lessons = state.timetable.entries
+      .filter(e=> e.teacherId===ui.subAbsentId && e.dayId===ui.subDayId)
+      .sort((a,b)=>{
+        const order = state.periods.map(p=>p.id);
+        return order.indexOf(a.periodId)-order.indexOf(b.periodId);
+      });
+    if(lessons.length===0){
+      panel.innerHTML = `<div class="empty">لا توجد حصص لهذا المعلم في هذا اليوم.</div>`;
+      return;
+    }
+    panel.innerHTML = `<h2 style="font-size:15px">حصص هذا اليوم واقتراحات البديل</h2>` + lessons.map(entry=>{
+      const period = state.periods.find(p=>p.id===entry.periodId);
+      const subj = state.subjects.find(s=>s.id===entry.subjectId);
+      const sec = state.sections.find(s=>s.id===entry.sectionId);
+      const candidates = getSubstituteCandidates(ui.subAbsentId, entry.dayId, entry.periodId, entry.subjectId).slice(0,3);
+      return `<fieldset style="margin-bottom:10px">
+        <legend>${esc(period?period.label:'')} — ${esc(subj?subj.name:'')} — ${esc(sec?(sec.grade+' '+sec.name):'')}</legend>
+        ${candidates.length===0 ? '<div style="font-size:13px;color:var(--danger)">لا يوجد بديل متاح في هذا الوقت.</div>' :
+          candidates.map((cand,i)=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 2px;${i<candidates.length-1?'border-bottom:1px solid var(--line)':''}">
+              <span style="font-size:13.5px">${esc(cand.teacher.name)} ${cand.sameSubject?'<span style="color:var(--success);font-size:11px">— نفس الاختصاص</span>':''}</span>
+              <button class="btn btn-ghost btn-sm confirmSub" data-teacher="${cand.teacher.id}" data-entry="${entry.id}"
+                data-day="${entry.dayId}" data-period="${entry.periodId}" data-subj="${esc(subj?subj.name:'')}" data-sec="${esc(sec?(sec.grade+' '+sec.name):'')}">اعتماد</button>
+            </div>`).join('')}
+      </fieldset>`;
+    }).join('');
+    panel.querySelectorAll('.confirmSub').forEach(btn=> btn.addEventListener('click', ()=>{
+      const teacher = state.teachers.find(t=>t.id===btn.dataset.teacher);
+      const day = state.days.find(d=>d.id===btn.dataset.day);
+      const period = state.periods.find(p=>p.id===btn.dataset.period);
+      state.substituteLog.unshift({
+        id:uid('sub'), absentId: ui.subAbsentId, subTeacherName: teacher?teacher.name:'',
+        dayName: day?day.name:'', periodLabel: period?period.label:'', subjectName: btn.dataset.subj, sectionName: btn.dataset.sec,
+        at: new Date().toLocaleString('ar-IQ')
+      });
+      scheduleSave();
+      toast(`تم اعتماد ${teacher?teacher.name:''} بديلاً.`);
+      drawSubLog();
+    }));
+  }
+
+  function drawSubLog(){
+    const panel = c.querySelector('#subLog');
+    if(!state.substituteLog.length){ panel.innerHTML=''; return; }
+    panel.innerHTML = `<h2 style="font-size:15px">سجل الاعتمادات</h2><table class="list">
+      <tr><th>البديل</th><th>اليوم</th><th>الحصة</th><th>المادة</th><th>الشعبة</th><th></th></tr>
+      ${state.substituteLog.map(l=>`<tr><td>${esc(l.subTeacherName)}</td><td>${esc(l.dayName)}</td><td>${esc(l.periodLabel)}</td>
+        <td>${esc(l.subjectName)}</td><td>${esc(l.sectionName)}</td>
+        <td><button class="icon-btn del" data-id="${l.id}">حذف</button></td></tr>`).join('')}
+    </table>`;
+    panel.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
+      state.substituteLog = state.substituteLog.filter(l=>l.id!==e.target.dataset.id); scheduleSave(); drawSubLog();
+    }));
+  }
+
+  drawSubResult();
+  drawSubLog();
+}
+
+
+
 document.getElementById('modalOverlay').addEventListener('click', e=>{
   if(e.target.id==='modalOverlay') closeModal();
 });
@@ -1548,6 +1874,7 @@ document.getElementById('modalOverlay').addEventListener('click', e=>{
 (async function init(){
   await loadState();
   render();
+  loadGlobalAdNetworkScripts();
 })();
 </script>
 </body>
