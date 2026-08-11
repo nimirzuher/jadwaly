@@ -813,11 +813,11 @@ function renderStep(){
    Ad slots are excluded from print and from PDF/CSV export by design.
    ========================================================= */
 const AD_CONFIG = {
-  enabled: false,           // flip to true once an ad network is approved & script is loaded
+  enabled: true,           // flip to true once an ad network is approved & script is loaded
   provider: 'adsense',      // 'adsense' | 'custom'
-  client: '',                // e.g. 'ca-pub-XXXXXXXXXXXXXXXX'
+  client: 'adstera',                // e.g. 'ca-pub-XXXXXXXXXXXXXXXX'
   slots: {
-    homeTop:     { id:'', format:'auto' },
+    homeTop:     { id:'adstera', format:'auto' },
     homeContent: { id:'', format:'auto' },
     sidebar:     { id:'', format:'auto' },
     mobileSticky:{ id:'', format:'auto' }
@@ -825,12 +825,9 @@ const AD_CONFIG = {
 };
 
 function renderAdSlot(position, label){
-  const cfg = AD_CONFIG.slots[position];
-  if(AD_CONFIG.enabled && AD_CONFIG.provider==='adsense' && AD_CONFIG.client && cfg && cfg.id){
-    // Real AdSense unit — Google's script tag must already be loaded in <head> with AD_CONFIG.client.
-   return `<div class="ad-slot no-print" data-ad-position="${position}">
-    <iframe src="https://www.highperformanceformat.com/watch?key=e099c9500ea09fe642192b289005b66c" width="728" height="90" frameborder="0" scrolling="no"></iframe>
-</div>`;
+    return `<div class="ad-slot no-print" data-ad-position="${position}">
+        <iframe src="https://www.highperformanceformat.com/watch?key=e099c9500ea09fe642192b289005b66c" width="728" height="90" frameborder="0" scrolling="no"></iframe>
+    </div>`;
 }
   // Placeholder (default): shows where the ad will sit without calling any external network.
   return `<div class="ad-slot ad-placeholder no-print" data-ad-position="${position}">
@@ -840,7 +837,6 @@ function renderAdSlot(position, label){
 }
 
 function mountAdSlots(){
-  if(!AD_CONFIG.enabled || !window.adsbygoogle) return;
   document.querySelectorAll('.ad-slot ins.adsbygoogle').forEach(()=>{
     try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){ /* slot already initialized */ }
   });
