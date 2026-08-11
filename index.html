@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>جدولي — إنشاء الجدول المدرسي تلقائياً</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16213E;
+    --ink-soft:#3C4566;
+    --paper:#EEF0F4;
+    --surface:#FFFFFF;
+    --line:#D9DCE4;
+    --primary:#1F6F63;
+    --primary-dark:#154D44;
+    --accent:#E3A438;
+    --accent-dark:#B87F22;
+    --danger:#C4483C;
+    --danger-bg:#FBEAE8;
+    --success:#3B8564;
+    --success-bg:#E8F3EC;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Tajawal',sans-serif;
+    font-size:15px;
+    line-height:1.6;
+  }
+  h1,h2,h3,.disp{font-family:'IBM Plex Sans Arabic',sans-serif;font-weight:700;color:var(--ink);}
+  .mono{font-family:'IBM Plex Mono',monospace;letter-spacing:.02em;}
+  a{color:inherit;}
+
+  /* ---------- App shell ---------- */
+  #app{display:flex;min-height:100vh;}
+  .sidebar{
+    width:260px;flex:0 0 260px;background:var(--ink);color:#DDE2F0;
+    padding:22px 16px;display:flex;flex-direction:column;gap:4px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:14px;}
+  .brand-mark{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--primary));flex:0 0 34px;position:relative;}
+  .brand-mark::after{content:"";position:absolute;inset:8px;border:2px solid rgba(255,255,255,.85);border-radius:3px;}
+  .brand-name{font-family:'IBM Plex Sans Arabic';font-weight:700;font-size:18px;color:#fff;}
+  .brand-tag{font-size:11px;color:#9AA3C4;}
+  .step{
+    display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;
+    color:#B9C0DA;font-size:14px;transition:background .15s;
+  }
+  .step:hover{background:rgba(255,255,255,.06);}
+  .step.active{background:rgba(227,164,56,.14);color:#fff;}
+  .step-num{
+    font-family:'IBM Plex Mono';font-size:11px;width:24px;height:24px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;flex:0 0 24px;
+    border:1px solid #4A5478;color:#8E97BB;
+  }
+  .step.active .step-num{background:var(--accent);border-color:var(--accent);color:#1a1a1a;}
+  .step.done .step-num{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .sidebar-foot{margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);font-size:11.5px;color:#7C86AC;}
+
+  /* ---------- Ad slots ---------- */
+  .ad-slot{margin:0 0 16px;}
+  .ad-placeholder{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    background:repeating-linear-gradient(45deg,#F2F3F6,#F2F3F6 8px,#E9EBF0 8px,#E9EBF0 16px);
+    border:1px dashed #C7CBD6;border-radius:8px;color:#9AA0B4;min-height:64px;padding:10px;text-align:center;
+  }
+  .ad-tag{font-size:11.5px;font-weight:600;}
+  .ad-note{font-size:10px;opacity:.8;}
+  [data-ad-position="homeTop"].ad-placeholder{min-height:70px;}
+  [data-ad-position="homeContent"].ad-placeholder{min-height:80px;}
+  .sidebar .ad-slot{margin:14px 0 0;}
+  .sidebar .ad-placeholder{min-height:180px;background:repeating-linear-gradient(45deg,#1B2444,#1B2444 8px,#212B4E 8px,#212B4E 16px);border-color:#3A4470;color:#8A93BE;}
+  @media (max-width:860px){
+    .sidebar .ad-slot{display:none;} /* the bottom nav bar already competes for space on mobile */
+  }
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .topbar{
+    background:var(--surface);border-bottom:1px solid var(--line);padding:14px 28px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:5;
+  }
+  .topbar h1{font-size:17px;margin:0;}
+  .score-badge{
+    display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);
+    border-radius:999px;padding:6px 14px 6px 6px;font-size:13px;
+  }
+  .score-ring{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono';font-size:10.5px;font-weight:600;color:#fff;background:var(--primary);}
+  .content{padding:26px 32px 80px;max-width:980px;width:100%;margin:0 auto;}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:24px 26px;margin-bottom:18px;}
+  .panel h2{font-size:19px;margin:0 0 4px;}
+  .panel .sub{color:var(--ink-soft);font-size:13.5px;margin:0 0 18px;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  label{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:5px;font-weight:500;}
+  input[type=text],input[type=number],input[type=time],select,textarea{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-family:inherit;
+    font-size:14px;background:#fff;color:var(--ink);
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline-offset:1px;border-color:var(--primary);}
+  .field{margin-bottom:14px;}
+  .row{display:flex;gap:10px;align-items:end;}
+  .row > *{flex:1;}
+  fieldset{border:1px dashed var(--line);border-radius:8px;padding:12px;margin:0 0 12px;}
+  fieldset legend{padding:0 6px;font-size:12px;color:var(--ink-soft);}
+  .chip-list{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);
+    border-radius:999px;padding:5px 6px 5px 12px;font-size:12.5px;
+  }
+  .chip button{background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;width:20px;height:20px;border-radius:50%;}
+  .chip button:hover{background:var(--danger-bg);}
+
+  button{font-family:inherit;cursor:pointer;}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:1px solid transparent;
+    font-size:14px;font-weight:500;
+  }
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:hover{background:var(--primary-dark);}
+  .btn-accent{background:var(--accent);color:#20180a;font-weight:700;}
+  .btn-accent:hover{background:var(--accent-dark);color:#fff;}
+  .btn-ghost{background:transparent;border-color:var(--line);color:var(--ink);}
+  .btn-ghost:hover{background:var(--paper);}
+  .btn-danger{background:var(--danger-bg);color:var(--danger);border-color:#EFC9C4;}
+  .btn-sm{padding:6px 12px;font-size:12.5px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+
+  table.list{width:100%;border-collapse:collapse;font-size:13.5px;}
+  table.list th{text-align:right;color:var(--ink-soft);font-weight:500;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--line);}
+  table.list td{padding:9px 10px;border-bottom:1px solid #EEF0F4;}
+  table.list tr:hover td{background:var(--paper);}
+  .icon-btn{background:none;border:none;color:var(--ink-soft);padding:4px 6px;border-radius:6px;font-size:13px;}
+  .icon-btn:hover{background:var(--paper);color:var(--ink);}
+  .icon-btn.del:hover{background:var(--danger-bg);color:var(--danger);}
+
+  .empty{
+    text-align:center;padding:34px 10px;color:var(--ink-soft);border:1px dashed var(--line);border-radius:8px;font-size:13.5px;
+  }
+  .footer-actions{display:flex;justify-content:space-between;margin-top:6px;}
+
+  /* ---------- Landing / hero ---------- */
+  .hero{
+    background:radial-gradient(circle at 85% -10%, rgba(227,164,56,.18), transparent 45%), var(--ink);
+    color:#fff;border-radius:14px;padding:50px 40px;margin-bottom:20px;position:relative;overflow:hidden;
+  }
+  .hero-grid{position:absolute;inset:0;opacity:.06;
+    background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);
+    background-size:44px 44px;pointer-events:none;}
+  .hero h1{font-size:34px;color:#fff;margin:0 0 12px;max-width:560px;line-height:1.3;}
+  .hero p{color:#B9C0DA;max-width:520px;font-size:15px;margin:0 0 22px;}
+  .hero .actions{display:flex;gap:12px;}
+
+  /* ---------- Timetable grid ---------- */
+  .tt-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;}
+  table.tt{border-collapse:collapse;width:100%;min-width:640px;}
+  table.tt th{
+    background:var(--ink);color:#fff;font-size:12.5px;font-weight:500;padding:10px 6px;text-align:center;
+    font-family:'IBM Plex Sans Arabic';
+  }
+  table.tt td{border:1px solid var(--line);padding:0;vertical-align:top;height:64px;position:relative;}
+  .period-col{
+    background:var(--paper);text-align:center;font-family:'IBM Plex Mono';font-size:11px;color:var(--ink-soft);
+    padding:6px 4px;width:64px;
+  }
+  .period-col .num{display:block;font-size:15px;color:var(--ink);font-weight:600;}
+  .cell-lesson{
+    height:100%;padding:6px 8px;cursor:pointer;position:relative;border-right:4px solid var(--subj,#999);
+    display:flex;flex-direction:column;justify-content:center;gap:2px;
+  }
+  .cell-lesson:hover{filter:brightness(.97);}
+  .cell-lesson.selected{outline:2px solid var(--accent);outline-offset:-2px;}
+  .cell-lesson.manual::after{
+    content:"يدوي";position:absolute;top:2px;left:4px;font-size:9px;color:var(--accent-dark);
+    background:#FFF6E5;padding:1px 5px;border-radius:4px;
+  }
+  .cell-lesson .subj{font-size:12.5px;font-weight:600;color:var(--ink);}
+  .cell-lesson .teach{font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono';}
+  .cell-empty{height:100%;display:flex;align-items:center;justify-content:center;color:#C7CBD6;font-size:16px;cursor:pointer;}
+  .cell-break{background:repeating-linear-gradient(45deg,#F4F5F8,#F4F5F8 6px,#ECEEF2 6px,#ECEEF2 12px);text-align:center;color:var(--ink-soft);font-size:11px;}
+
+  /* ---- Whole-school master table ---- */
+  table.tt.master th{font-size:11px;padding:8px 4px;line-height:1.4;background:#E3E5EA;color:var(--ink);}
+  table.tt.master .day-col-h{width:36px;}
+  table.tt.master .day-col{
+    background:var(--ink);color:#fff;text-align:center;font-family:'IBM Plex Sans Arabic';
+    font-weight:600;font-size:12.5px;width:36px;padding:6px 2px;
+    writing-mode:vertical-rl;text-orientation:mixed;
+  }
+  table.tt.master .period-col{width:56px;font-size:10px;}
+  table.tt.master .period-col .num{font-size:13px;}
+  table.tt.master .cell-lesson{padding:4px 6px;}
+  table.tt.master .cell-lesson .subj{font-size:11px;}
+  table.tt.master .cell-lesson .teach{font-size:9.5px;}
+  table.tt.master td{height:48px;}
+  .cell-lesson-plain{
+    height:100%;display:flex;align-items:center;justify-content:center;text-align:center;
+    padding:4px 3px;font-size:11px;color:var(--ink);line-height:1.35;
+  }
+  .cell-lesson-plain.manual{background:#FFF8E9;}
+  table.tt.master .cell-empty{color:#B7BBC6;font-size:11px;letter-spacing:1px;}
+  @media print{
+    table.tt.master .day-col{background:#333 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    table.tt.master tr{page-break-inside:avoid;}
+  }
+
+  .score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px;}
+  .score-card{background:var(--paper);border-radius:8px;padding:14px;text-align:center;}
+  .score-card .val{font-family:'IBM Plex Mono';font-size:22px;font-weight:600;color:var(--ink);}
+  .score-card .lbl{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .score-card.bad .val{color:var(--danger);}
+  .score-card.good .val{color:var(--success);}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:12px 20px;border-radius:8px;font-size:13.5px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.2);
+    display:none;
+  }
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,20,40,.5);display:none;align-items:center;justify-content:center;z-index:60;}
+  .modal{background:#fff;border-radius:12px;padding:22px 24px;max-width:380px;width:92%;}
+  .modal h3{margin:0 0 8px;font-size:16px;}
+  .modal p{font-size:13.5px;color:var(--ink-soft);margin:0 0 18px;}
+  .modal .actions{display:flex;gap:10px;justify-content:flex-end;}
+
+  .view-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+  .view-tab{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:13px;cursor:pointer;}
+  .view-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  .section-block{margin-bottom:30px;}
+  .section-block:last-child{margin-bottom:0;}
+  .section-block h3{font-size:14.5px;margin:0 0 10px;color:var(--ink);font-family:'IBM Plex Sans Arabic';}
+  @media print{
+    .section-block{page-break-inside:avoid;}
+    .section-block + .section-block{page-break-before:always;}
+  }
+
+  .unassigned-box{background:var(--danger-bg);border:1px solid #EFC9C4;border-radius:8px;padding:14px 16px;margin-top:14px;}
+  .unassigned-box h3{font-size:13.5px;color:var(--danger);margin:0 0 8px;}
+  .unassigned-box li{font-size:13px;margin-bottom:4px;}
+  .hint-box{background:#FFF8E9;border:1px solid #F1DDA6;border-radius:8px;padding:12px 14px;font-size:12.5px;color:#7A5B12;margin-top:12px;}
+
+  @media (max-width:860px){
+    .sidebar{position:fixed;bottom:0;top:auto;width:100%;flex-direction:row;overflow-x:auto;padding:8px 10px;z-index:20;}
+    .brand,.sidebar-foot{display:none;}
+    .step{flex-direction:column;gap:4px;padding:6px 8px;min-width:64px;text-align:center;font-size:10px;}
+    .main{padding-bottom:70px;}
+    .content{padding:16px 14px 90px;}
+    .grid2,.grid3{grid-template-columns:1fr;}
+    .hero{padding:30px 20px;}
+    .hero h1{font-size:24px;}
+  }
+
+  @page{ size: A4 landscape; margin: 8mm; }
+
+  .print-only{display:none;}
+
+  @media print{
+    .no-print{display:none !important;}
+    body{background:#fff;font-size:11px;}
+    .content{max-width:100%;padding:0;}
+    .panel{border:none;padding:0;}
+    table.tt th{background:#eee !important;color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .cell-lesson{border-right-width:3px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+
+    .print-only{display:block;margin-bottom:8px;text-align:center;}
+    .print-only .p-school{font-family:'IBM Plex Sans Arabic';font-weight:700;font-size:15px;color:#000;}
+    .print-only .p-meta{font-size:10px;color:#333;margin-top:2px;}
+
+    /* Compact the whole-school master table so all sections/days fit on 1–2 pages */
+    table.tt.master{width:100%;table-layout:fixed;}
+    table.tt.master th{font-size:7.5px;padding:3px 1px;line-height:1.2;}
+    table.tt.master .day-col-h{width:20px;}
+    table.tt.master .day-col{width:20px;font-size:9px;padding:2px 1px;}
+    table.tt.master .period-col{width:34px;font-size:6.5px;padding:2px 1px;}
+    table.tt.master .period-col .num{font-size:9px;}
+    table.tt.master td{height:22px;}
+    table.tt.master .cell-lesson-plain{font-size:6.3px;line-height:1.15;padding:1px 2px;}
+    table.tt.master .cell-empty{font-size:7px;}
+    table.tt.master .cell-break{font-size:7px;}
+    table.tt.master tr{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<script>
+/* =========================================================
+   JADWALI — نموذج أولي تفاعلي حقيقي (لا بيانات وهمية للتوليد)
+   محرك جدولة يعتمد على قيود صلبة + بحث محلي لتحسين الجودة
+   ========================================================= */
+
+const STORAGE_KEY = 'jadwali-project-v1';
+const SUBJECT_COLORS = ['#1F6F63','#E3A438','#7C5CBF','#C4483C','#2E86AB','#B87F22','#3B8564','#8E5572','#4B6584','#B0655F'];
+
+let state = null;
+let ui = { step:'home', selectedCell:null, ttView:'school', ttViewId:null };
+let saveTimer = null;
+
+function uid(prefix){ return prefix+'_'+Math.random().toString(36).slice(2,9); }
+
+function freshState(){
+  return {
+    school:{ name:'', year:'', directorate:'', governorate:'' },
+    days:[
+      {id:uid('d'),name:'الأحد'},{id:uid('d'),name:'الاثنين'},{id:uid('d'),name:'الثلاثاء'},
+      {id:uid('d'),name:'الأربعاء'},{id:uid('d'),name:'الخميس'}
+    ],
+    periods:[
+      {id:uid('p'),label:'1',start:'08:00',end:'08:40',type:'lesson'},
+      {id:uid('p'),label:'فسحة',start:'08:40',end:'08:45',type:'break'},
+      {id:uid('p'),label:'2',start:'08:45',end:'09:25',type:'lesson'},
+      {id:uid('p'),label:'فسحة',start:'09:25',end:'09:35',type:'break'},
+      {id:uid('p'),label:'3',start:'09:35',end:'10:15',type:'lesson'},
+      {id:uid('p'),label:'فسحة',start:'10:15',end:'10:20',type:'break'},
+      {id:uid('p'),label:'4',start:'10:20',end:'11:00',type:'lesson'},
+      {id:uid('p'),label:'فسحة',start:'11:00',end:'11:05',type:'break'},
+      {id:uid('p'),label:'5',start:'11:05',end:'11:45',type:'lesson'},
+      {id:uid('p'),label:'فسحة',start:'11:45',end:'11:50',type:'break'},
+      {id:uid('p'),label:'6',start:'11:50',end:'12:30',type:'lesson'}
+    ],
+    specializations:[],
+    subjects:[],
+    teachers:[],
+    sections:[],
+    requirements:[],
+    timetable:null // {entries:[], unassigned:[], score:{}}
+  };
+}
+
+let saveInFlight = false;
+let savePending = false;
+let saveFailCount = 0;
+let storageWarned = false;
+
+async function loadState(){
+  try{
+    if(window.storage){
+      const res = await window.storage.get(STORAGE_KEY, false);
+      if(res && res.value){ state = JSON.parse(res.value); return; }
+    }
+  }catch(e){ /* no saved project yet, or storage unavailable — start fresh */ }
+  state = freshState();
+}
+
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(runSave, 500);
+}
+
+async function runSave(){
+  if(!window.storage) return;
+  if(saveFailCount >= 3) return; // storage seems unavailable this session — stop retrying, keep working in-memory
+  if(saveInFlight){ savePending = true; return; }
+  saveInFlight = true;
+  const snapshot = JSON.stringify(state);
+  try{
+    await window.storage.set(STORAGE_KEY, snapshot, false);
+    saveFailCount = 0;
+  }catch(e){
+    saveFailCount++;
+    if(!storageWarned){
+      storageWarned = true;
+      console.warn('Jadwali: local autosave is unavailable right now — your work still stays in this session.', e);
+      toast('تعذّر الحفظ التلقائي محلياً — العمل مستمر لكن قد لا يُحفظ بعد إغلاق الصفحة.');
+    }
+  }finally{
+    saveInFlight = false;
+    if(savePending){ savePending = false; runSave(); }
+  }
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>{ t.style.display='none'; }, 2600);
+}
+
+function showModal(html){
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalOverlay').style.display='flex';
+}
+function closeModal(){ document.getElementById('modalOverlay').style.display='none'; }
+
+/* ================= SCHEDULING ENGINE =================
+   1) Build lesson units from requirements
+   2) Order by constrainedness (degree heuristic)
+   3) Greedy placement respecting HARD constraints, scored by SOFT preference
+   4) Local search (min-conflicts style) to reduce soft-cost further
+   5) Score the result
+   ======================================================= */
+function lessonSlots(st){
+  const slots = [];
+  st.days.forEach(d=> st.periods.filter(p=>p.type==='lesson').forEach(p=> slots.push({dayId:d.id, periodId:p.id})));
+  return slots;
+}
+
+function teacherUnavailable(teacher, dayId, periodId){
+  return (teacher.unavailable||[]).some(u=>u.dayId===dayId && u.periodId===periodId);
+}
+function teacherPreferred(teacher, dayId, periodId){
+  return (teacher.preferred||[]).some(u=>u.dayId===dayId && u.periodId===periodId);
+}
+
+function buildLessonUnits(st){
+  const units = [];
+  st.requirements.forEach(r=>{
+    const count = parseInt(r.weeklyCount)||0;
+    for(let i=0;i<count;i++){
+      units.push({ id: uid('lu'), sectionId:r.sectionId, subjectId:r.subjectId, teacherId:r.teacherId, reqId:r.id });
+    }
+  });
+  return units;
+}
+
+function generateTimetable(st){
+  const slots = lessonSlots(st);
+  const lessons = buildLessonUnits(st);
+  const teacherById = Object.fromEntries(st.teachers.map(t=>[t.id,t]));
+
+  // occupancy trackers
+  const sectionBusy = {}; // sectionId -> "day|period" -> lessonId
+  const teacherBusy = {}; // teacherId -> "day|period" -> lessonId
+  const teacherDaily = {}; // teacherId -> dayId -> count
+  const sectionDaySubject = {}; // sectionId -> dayId -> Set(subjectId)
+  const sectionDayCount = {}; // sectionId -> dayId -> count
+
+  function key(a,b){ return a+'|'+b; }
+  function ensure(obj,k,def){ if(!obj[k]) obj[k]=def(); return obj[k]; }
+
+  // domain size (MRV) for ordering: fewer valid slots => scheduled first
+  function validSlots(lesson){
+    const teacher = teacherById[lesson.teacherId];
+    return slots.filter(s=>{
+      if(teacher && teacherUnavailable(teacher, s.dayId, s.periodId)) return false;
+      if(sectionBusy[key(lesson.sectionId,'x')]) {} // noop, placeholder
+      const sb = ensure(sectionBusy, lesson.sectionId, ()=>({}));
+      if(sb[key(s.dayId,s.periodId)]) return false;
+      const tb = ensure(teacherBusy, lesson.teacherId, ()=>({}));
+      if(tb[key(s.dayId,s.periodId)]) return false;
+      const td = ensure(teacherDaily, lesson.teacherId, ()=>({}));
+      const max = teacher ? (parseInt(teacher.maxDaily)||8) : 8;
+      if((td[s.dayId]||0) >= max) return false;
+      return true;
+    });
+  }
+
+  function softScore(lesson, s){
+    let score = 0;
+    const teacher = teacherById[lesson.teacherId];
+    if(teacher && teacherPreferred(teacher, s.dayId, s.periodId)) score += 5;
+    const sds = ensure(sectionDaySubject, lesson.sectionId, ()=>({}));
+    const setForDay = sds[s.dayId] ? sds[s.dayId] : new Set();
+    if(setForDay.has(lesson.subjectId)) score -= 6; // avoid repeating same subject same day
+    const sdc = ensure(sectionDayCount, lesson.sectionId, ()=>({}));
+    const dayLoad = sdc[s.dayId]||0;
+    score -= dayLoad*0.6; // prefer spreading across less-loaded days
+    const td = ensure(teacherDaily, lesson.teacherId, ()=>({}));
+    score -= (td[s.dayId]||0)*0.3; // spread teacher across days too
+    return score;
+  }
+
+  // order lessons: fewest valid slots first (most constrained), tie-break random
+  let ordered = lessons.map(l=>l).sort(()=>Math.random()-0.5);
+  ordered.sort((a,b)=> validSlots(a).length - validSlots(b).length);
+
+  const entries = [];
+  const unassigned = [];
+
+  ordered.forEach(lesson=>{
+    const candidates = validSlots(lesson);
+    if(candidates.length===0){
+      const teacher = teacherById[lesson.teacherId];
+      let reason = 'لا يوجد وقت متاح يحقق كل القيود.';
+      if(teacher){
+        const td = ensure(teacherDaily, teacher.id, ()=>({}));
+        const totalUsed = st.days.reduce((s,d)=>s+(td[d.id]||0),0);
+        const cap = (parseInt(teacher.maxDaily)||8) * st.days.length;
+        if(totalUsed >= cap) reason = `المعلم ${teacher.name} وصل إلى الحد الأقصى لعدد الحصص الأسبوعية (${cap}).`;
+        else reason = `تعارض في توفر المعلم ${teacher.name} مع الحصص المتبقية لهذه الشعبة.`;
+      }
+      unassigned.push({ sectionId:lesson.sectionId, subjectId:lesson.subjectId, teacherId:lesson.teacherId, reason });
+      return;
+    }
+    candidates.sort((a,b)=> softScore(lesson,b) - softScore(lesson,a));
+    const top = candidates.slice(0, Math.min(3, candidates.length));
+    const chosen = top[Math.floor(Math.random()*top.length)];
+
+    const sb = ensure(sectionBusy, lesson.sectionId, ()=>({}));
+    const tb = ensure(teacherBusy, lesson.teacherId, ()=>({}));
+    const td = ensure(teacherDaily, lesson.teacherId, ()=>({}));
+    const sds = ensure(sectionDaySubject, lesson.sectionId, ()=>({}));
+    const sdc = ensure(sectionDayCount, lesson.sectionId, ()=>({}));
+
+    sb[key(chosen.dayId,chosen.periodId)] = lesson.id;
+    tb[key(chosen.dayId,chosen.periodId)] = lesson.id;
+    td[chosen.dayId] = (td[chosen.dayId]||0)+1;
+    if(!sds[chosen.dayId]) sds[chosen.dayId] = new Set();
+    sds[chosen.dayId].add(lesson.subjectId);
+    sdc[chosen.dayId] = (sdc[chosen.dayId]||0)+1;
+
+    entries.push({ id: lesson.id, dayId:chosen.dayId, periodId:chosen.periodId,
+      sectionId:lesson.sectionId, subjectId:lesson.subjectId, teacherId:lesson.teacherId, manual:false });
+  });
+
+  localSearchImprove(st, entries, teacherById, slots);
+
+  const score = scoreTimetable(st, entries, unassigned);
+  return { entries, unassigned, score };
+}
+
+// min-conflicts style local search: try swapping two entries' slots if it reduces soft cost, without breaking hard constraints
+function localSearchImprove(st, entries, teacherById, slots){
+  const iterations = Math.min(1500, entries.length*40);
+  function occupied(entries, dayId, periodId, excludeIds){
+    return entries.some(e=> e.dayId===dayId && e.periodId===periodId && !excludeIds.includes(e.id));
+  }
+  function hardOkAt(e, dayId, periodId, others){
+    const teacher = teacherById[e.teacherId];
+    if(teacher && teacherUnavailable(teacher, dayId, periodId)) return false;
+    const sectionClash = others.some(o=>o.sectionId===e.sectionId && o.dayId===dayId && o.periodId===periodId);
+    const teacherClash = others.some(o=>o.teacherId===e.teacherId && o.dayId===dayId && o.periodId===periodId);
+    if(sectionClash || teacherClash) return false;
+    if(teacher){
+      const max = parseInt(teacher.maxDaily)||8;
+      const countOnDay = others.filter(o=>o.teacherId===e.teacherId && o.dayId===dayId).length;
+      if(countOnDay >= max) return false;
+    }
+    return true;
+  }
+  function localCost(entries){
+    let cost = 0;
+    const bySection = {};
+    entries.forEach(e=>{
+      (bySection[e.sectionId] = bySection[e.sectionId]||[]).push(e);
+    });
+    Object.values(bySection).forEach(list=>{
+      const byDay = {};
+      list.forEach(e=> (byDay[e.dayId]=byDay[e.dayId]||[]).push(e));
+      Object.values(byDay).forEach(dayList=>{
+        const subjCount = {};
+        dayList.forEach(e=> subjCount[e.subjectId]=(subjCount[e.subjectId]||0)+1);
+        Object.values(subjCount).forEach(c=>{ if(c>1) cost += (c-1)*3; });
+      });
+      const counts = Object.values(byDay).map(l=>l.length);
+      if(counts.length>1){
+        const avg = counts.reduce((a,b)=>a+b,0)/counts.length;
+        cost += counts.reduce((s,c)=>s+Math.abs(c-avg),0);
+      }
+    });
+    return cost;
+  }
+
+  let currentCost = localCost(entries);
+  for(let i=0;i<iterations;i++){
+    if(entries.length<2) break;
+    const a = entries[Math.floor(Math.random()*entries.length)];
+    const b = entries[Math.floor(Math.random()*entries.length)];
+    if(a.id===b.id) continue;
+    const others = entries.filter(e=>e.id!==a.id && e.id!==b.id);
+    // try swapping a and b's day/period
+    const aDay=a.dayId, aPer=a.periodId, bDay=b.dayId, bPer=b.periodId;
+    const aOk = hardOkAt(a, bDay, bPer, others.concat([{...b, dayId:aDay, periodId:aPer}]));
+    const bOk = hardOkAt(b, aDay, aPer, others.concat([{...a, dayId:bDay, periodId:bPer}]));
+    if(!aOk || !bOk) continue;
+    a.dayId=bDay; a.periodId=bPer; b.dayId=aDay; b.periodId=aPer;
+    const newCost = localCost(entries);
+    if(newCost <= currentCost){ currentCost = newCost; }
+    else { a.dayId=aDay; a.periodId=aPer; b.dayId=bDay; b.periodId=bPer; } // revert
+  }
+}
+
+function scoreTimetable(st, entries, unassigned){
+  const teacherById = Object.fromEntries(st.teachers.map(t=>[t.id,t]));
+  // hard conflicts (should be 0 by construction, verify anyway)
+  let teacherConflicts=0, sectionConflicts=0;
+  const seenT = {}, seenS = {};
+  entries.forEach(e=>{
+    const tk = e.teacherId+'|'+e.dayId+'|'+e.periodId;
+    const sk = e.sectionId+'|'+e.dayId+'|'+e.periodId;
+    if(seenT[tk]) teacherConflicts++; else seenT[tk]=1;
+    if(seenS[sk]) sectionConflicts++; else seenS[sk]=1;
+  });
+
+  // teacher gaps: count idle lesson-periods between first and last lesson each day
+  const lessonPeriods = st.periods.filter(p=>p.type==='lesson').map(p=>p.id);
+  let totalGaps = 0;
+  st.teachers.forEach(t=>{
+    st.days.forEach(d=>{
+      const periodsUsed = entries.filter(e=>e.teacherId===t.id && e.dayId===d.id).map(e=>e.periodId);
+      if(periodsUsed.length<2) return;
+      const idxs = periodsUsed.map(pid=>lessonPeriods.indexOf(pid)).sort((a,b)=>a-b);
+      const span = idxs[idxs.length-1]-idxs[0]+1;
+      totalGaps += (span - idxs.length);
+    });
+  });
+
+  // preference satisfaction
+  let prefTotal=0, prefMet=0;
+  entries.forEach(e=>{
+    const t = teacherById[e.teacherId];
+    if(t && (t.preferred||[]).length>0){
+      prefTotal++;
+      if(teacherPreferred(t, e.dayId, e.periodId)) prefMet++;
+    }
+  });
+  const prefPct = prefTotal>0 ? Math.round((prefMet/prefTotal)*100) : 100;
+
+  const totalRequired = entries.length + unassigned.length;
+  const unassignedPct = totalRequired>0 ? unassigned.length/totalRequired : 0;
+
+  let overall = 100;
+  overall -= teacherConflicts*8;
+  overall -= sectionConflicts*8;
+  overall -= Math.round(unassignedPct*100)*0.9;
+  overall -= Math.min(20, totalGaps*1.2);
+  overall -= Math.round((100-prefPct)*0.15);
+  overall = Math.max(0, Math.min(100, Math.round(overall)));
+
+  return { teacherConflicts, sectionConflicts, unassignedCount:unassigned.length,
+    teacherGaps: totalGaps, preferencePct: prefPct, overall };
+}
+
+/* ================= PRINT FIT (whole-school table → max 2 pages) =================
+   A4 landscape usable area (after 8mm margins, ~96dpi): ~1063px wide × ~734px tall.
+   We size rows/fonts so days × periods rows always fit within 2 such pages,
+   repeating the table header on each printed page. Page count is prioritized
+   over readability, per instruction — text may shrink significantly for large schools. */
+function computePrintFit(){
+  const lessonPeriods = state.periods.filter(p=>p.type==='lesson' || p.type==='break');
+  const totalRows = Math.max(1, state.days.length * lessonPeriods.length);
+  const totalCols = Math.max(1, state.sections.length);
+
+  const pageHeightPx = 734, pageWidthPx = 1063, pagesAllowed = 2;
+  const schoolHeaderPx = 46;      // print-only school name block, first page only
+  const theadPerPagePx = 24;      // repeated header row on every page
+  const availableHeight = (pageHeightPx*pagesAllowed) - schoolHeaderPx - (theadPerPagePx*pagesAllowed);
+
+  let rowH = Math.floor(availableHeight / totalRows);
+  rowH = Math.max(6, Math.min(24, rowH));
+
+  const dayPeriodColsPx = 76; // fixed width for the "day" + "period" columns
+  const colW = Math.floor((pageWidthPx - dayPeriodColsPx) / totalCols);
+
+  let cellFont = Math.max(3.6, Math.min(11, colW/6.2));
+  let headFont = Math.max(4.2, Math.min(10, colW/6));
+  let lineH = rowH < 14 ? 1.0 : 1.15;
+
+  return { rowH, cellFont, headFont, lineH };
+}
+
+function applyPrintFit(){
+  const f = computePrintFit();
+  let styleEl = document.getElementById('printFitStyle');
+  if(!styleEl){ styleEl = document.createElement('style'); styleEl.id='printFitStyle'; document.head.appendChild(styleEl); }
+  styleEl.textContent = `
+    @media print{
+      table.tt.master td{height:${f.rowH}px !important;}
+      table.tt.master th{font-size:${f.headFont}px !important;padding:1px 1px !important;line-height:1.1 !important;}
+      table.tt.master .day-col{font-size:${f.headFont}px !important;}
+      table.tt.master .period-col{font-size:${Math.max(3.4,f.cellFont-0.6)}px !important;padding:1px !important;}
+      table.tt.master .period-col .num{font-size:${f.headFont}px !important;}
+      table.tt.master .cell-lesson-plain{font-size:${f.cellFont}px !important;line-height:${f.lineH} !important;padding:0 1px !important;}
+      table.tt.master .cell-empty{font-size:${Math.max(3.4,f.cellFont-0.6)}px !important;}
+      table.tt.master .cell-break{font-size:${Math.max(3.4,f.cellFont-0.6)}px !important;}
+    }
+  `;
+}
+
+function removePrintFit(){
+  const el = document.getElementById('printFitStyle');
+  if(el) el.remove();
+}
+window.addEventListener('afterprint', removePrintFit);
+
+
+function loadDemoData(){
+  const s = freshState();
+  s.school = { name:'مدرسة الأمل الثانوية للبنين', year:'2025-2026', directorate:'مديرية تربية الرصافة الثانية', governorate:'بغداد' };
+
+  const specs = ['رياضيات','علوم','لغة عربية','لغة انكليزية','اجتماعيات','حاسوب'];
+  s.specializations = specs.map(n=>({id:uid('sp'), name:n}));
+  const specId = n => s.specializations.find(x=>x.name===n).id;
+
+  const subjectDefs = [
+    ['رياضيات','رياضيات'],['فيزياء','علوم'],['كيمياء','علوم'],['أحياء','علوم'],
+    ['عربي','لغة عربية'],['انكليزي','لغة انكليزية'],['اجتماعيات','اجتماعيات'],['حاسوب','حاسوب']
+  ];
+  s.subjects = subjectDefs.map(([name,sp],i)=>({id:uid('su'), name, specId:specId(sp), color:SUBJECT_COLORS[i%SUBJECT_COLORS.length]}));
+  const subjId = n => s.subjects.find(x=>x.name===n).id;
+
+  s.teachers = [
+    {id:uid('t'), name:'أ. أحمد الجبوري', specIds:[specId('رياضيات')], subjectIds:[subjId('رياضيات')], maxDaily:5, unavailable:[], preferred:[]},
+    {id:uid('t'), name:'أ. ليلى العبيدي', specIds:[specId('علوم')], subjectIds:[subjId('فيزياء'),subjId('كيمياء')], maxDaily:5, unavailable:[], preferred:[]},
+    {id:uid('t'), name:'أ. سارة محمود', specIds:[specId('علوم')], subjectIds:[subjId('أحياء')], maxDaily:4, unavailable:[], preferred:[]},
+    {id:uid('t'), name:'أ. حيدر كاظم', specIds:[specId('لغة عربية')], subjectIds:[subjId('عربي')], maxDaily:5, unavailable:[], preferred:[]},
+    {id:uid('t'), name:'أ. رنا فاضل', specIds:[specId('لغة انكليزية')], subjectIds:[subjId('انكليزي')], maxDaily:5, unavailable:[], preferred:[]},
+    {id:uid('t'), name:'أ. مصطفى ناجي', specIds:[specId('اجتماعيات')], subjectIds:[subjId('اجتماعيات')], maxDaily:4, unavailable:[], preferred:[]},
+    {id:uid('t'), name:'أ. زينب عادل', specIds:[specId('حاسوب')], subjectIds:[subjId('حاسوب')], maxDaily:4, unavailable:[], preferred:[]}
+  ];
+  const teachId = n => s.teachers.find(x=>x.name===n).id;
+
+  s.sections = [
+    {id:uid('sec'), stage:'إعدادية', grade:'السادس العلمي', name:'شعبة أ'},
+    {id:uid('sec'), stage:'إعدادية', grade:'السادس العلمي', name:'شعبة ب'}
+  ];
+
+  const reqTemplate = [
+    ['رياضيات', teachId('أ. أحمد الجبوري'), 5],
+    ['فيزياء', teachId('أ. ليلى العبيدي'), 4],
+    ['كيمياء', teachId('أ. ليلى العبيدي'), 4],
+    ['أحياء', teachId('أ. سارة محمود'), 3],
+    ['عربي', teachId('أ. حيدر كاظم'), 4],
+    ['انكليزي', teachId('أ. رنا فاضل'), 3],
+    ['اجتماعيات', teachId('أ. مصطفى ناجي'), 2],
+    ['حاسوب', teachId('أ. زينب عادل'), 2]
+  ];
+  s.requirements = [];
+  s.sections.forEach(sec=>{
+    reqTemplate.forEach(([subjName, teacherId, count])=>{
+      s.requirements.push({ id:uid('req'), sectionId:sec.id, subjectId:subjId(subjName), teacherId, weeklyCount:count });
+    });
+  });
+
+  s.timetable = null;
+  state = s;
+  scheduleSave();
+  ui.step = 'school';
+  render();
+  toast('تم تحميل بيانات تجريبية لمدرسة نموذجية.');
+}
+
+/* ================= RENDER ROOT ================= */
+const STEPS = [
+  {id:'home', label:'الرئيسية'},
+  {id:'school', label:'المدرسة'},
+  {id:'days', label:'الأيام والحصص'},
+  {id:'subjects', label:'التخصصات والمواد'},
+  {id:'teachers', label:'المعلمون'},
+  {id:'sections', label:'الصفوف والشعب'},
+  {id:'requirements', label:'متطلبات المواد'},
+  {id:'generate', label:'توليد الجدول'},
+  {id:'timetable', label:'الجدول الأسبوعي'},
+];
+
+function render(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="sidebar no-print">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div><div class="brand-name">جدولي</div><div class="brand-tag">Jadwali</div></div>
+      </div>
+      ${STEPS.map((s,i)=>`
+        <div class="step ${ui.step===s.id?'active':''}" data-step="${s.id}">
+          <div class="step-num">${i===0?'★':i}</div>
+          <div>${s.label}</div>
+        </div>`).join('')}
+      <div class="sidebar-foot">نموذج أولي محلي — البيانات محفوظة في متصفحك فقط.</div>
+      ${renderAdSlot('sidebar','إعلان — الشريط الجانبي')}
+    </div>
+    <div class="main">
+      <div class="topbar no-print">
+        <h1>${state.school.name || 'مشروع جدول جديد'}</h1>
+        ${state.timetable ? `
+          <div class="score-badge">
+            <div class="score-ring" style="background:${scoreColor(state.timetable.score.overall)}">${state.timetable.score.overall}</div>
+            <span>جودة الجدول</span>
+          </div>` : ''}
+      </div>
+      <div class="content" id="content"></div>
+    </div>
+  `;
+  document.querySelectorAll('.step').forEach(el=>{
+    el.addEventListener('click', ()=>{ ui.step = el.dataset.step; render(); });
+  });
+  renderStep();
+}
+
+function scoreColor(v){
+  if(v>=85) return 'var(--success)';
+  if(v>=60) return 'var(--accent-dark)';
+  return 'var(--danger)';
+}
+
+function renderStep(){
+  const c = document.getElementById('content');
+  const map = { home:renderHome, school:renderSchool, days:renderDays, subjects:renderSubjects,
+    teachers:renderTeachers, sections:renderSections, requirements:renderRequirements,
+    generate:renderGenerate, timetable:renderTimetable };
+  c.innerHTML = '';
+  (map[ui.step]||renderHome)(c);
+}
+
+/* =========================================================
+   ADVERTISING — provider-agnostic, swappable at launch.
+   Fill AD_CONFIG.client with your approved AdSense publisher ID
+   (or another network's equivalent) and set enabled:true to go live.
+   Until then, slots render a clearly-labeled placeholder so layout
+   and spacing can be reviewed before real ads are wired in.
+   Ad slots are excluded from print and from PDF/CSV export by design.
+   ========================================================= */
+const AD_CONFIG = {
+  enabled: false,           // flip to true once an ad network is approved & script is loaded
+  provider: 'adsense',      // 'adsense' | 'custom'
+  client: '',                // e.g. 'ca-pub-XXXXXXXXXXXXXXXX'
+  slots: {
+    homeTop:     { id:'', format:'auto' },
+    homeContent: { id:'', format:'auto' },
+    sidebar:     { id:'', format:'auto' },
+    mobileSticky:{ id:'', format:'auto' }
+  }
+};
+
+function renderAdSlot(position, label){
+  const cfg = AD_CONFIG.slots[position];
+  if(AD_CONFIG.enabled && AD_CONFIG.provider==='adsense' && AD_CONFIG.client && cfg && cfg.id){
+    // Real AdSense unit — Google's script tag must already be loaded in <head> with AD_CONFIG.client.
+    return `<div class="ad-slot no-print" data-ad-position="${position}">
+      <ins class="adsbygoogle" style="display:block" data-ad-client="${esc(AD_CONFIG.client)}"
+        data-ad-slot="${esc(cfg.id)}" data-ad-format="${esc(cfg.format||'auto')}" data-full-width-responsive="true"></ins>
+    </div>`;
+  }
+  // Placeholder (default): shows where the ad will sit without calling any external network.
+  return `<div class="ad-slot ad-placeholder no-print" data-ad-position="${position}">
+    <span class="ad-tag">مساحة إعلانية</span>
+    <span class="ad-note">${esc(label||'')}</span>
+  </div>`;
+}
+
+function mountAdSlots(){
+  if(!AD_CONFIG.enabled || !window.adsbygoogle) return;
+  document.querySelectorAll('.ad-slot ins.adsbygoogle').forEach(()=>{
+    try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){ /* slot already initialized */ }
+  });
+}
+
+/* ---------- HOME ---------- */
+function renderHome(c){
+  c.innerHTML = `
+    ${renderAdSlot('homeTop','إعلان — أعلى الصفحة')}
+    <div class="hero">
+      <div class="hero-grid"></div>
+      <h1>أنشئ جدول مدرستك تلقائياً خلال دقائق</h1>
+      <p>أدخل بيانات المعلمين والمواد والشعب، ويقوم جدولي بتوليد جدول أسبوعي خالٍ من التعارضات، مع إمكانية التعديل اليدوي والطباعة والتصدير.</p>
+      <div class="actions">
+        <button class="btn btn-accent" id="btnStart">إنشاء جدول — مجاناً</button>
+        <button class="btn btn-ghost" style="border-color:#4A5478;color:#fff" id="btnDemo">تحميل مدرسة نموذجية (تجربة سريعة)</button>
+      </div>
+    </div>
+    <div class="grid3">
+      <div class="panel"><h2 style="font-size:15px">إدخال منظم</h2><p class="sub" style="margin:0">أيام، حصص، معلمون، مواد، شعب — كل شيء قابل للتعديل بلا قيم ثابتة.</p></div>
+      <div class="panel"><h2 style="font-size:15px">محرك جدولة حقيقي</h2><p class="sub" style="margin:0">خوارزمية قيود صلبة + بحث محلي لتحسين توزيع الحصص، وليست عشوائية.</p></div>
+      <div class="panel"><h2 style="font-size:15px">تعديل وطباعة</h2><p class="sub" style="margin:0">عدّل الجدول يدوياً بسحب الحصص، ثم اطبعه أو صدّره إلى Excel.</p></div>
+    </div>
+    ${renderAdSlot('homeContent','إعلان — ضمن المحتوى')}
+  `;
+  c.querySelector('#btnStart').addEventListener('click', ()=>{ ui.step='school'; render(); });
+  c.querySelector('#btnDemo').addEventListener('click', loadDemoData);
+  mountAdSlots();
+}
+
+/* ---------- SCHOOL ---------- */
+function renderSchool(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2>بيانات المدرسة</h2>
+      <p class="sub">هذه البيانات تظهر في رأس الجدول عند الطباعة والتصدير.</p>
+      <div class="grid2">
+        <div class="field"><label>اسم المدرسة</label><input type="text" id="f_name" value="${esc(state.school.name)}"></div>
+        <div class="field"><label>العام الدراسي</label><input type="text" id="f_year" value="${esc(state.school.year)}" placeholder="2025-2026"></div>
+        <div class="field"><label>المديرية</label><input type="text" id="f_dir" value="${esc(state.school.directorate)}"></div>
+        <div class="field"><label>المحافظة</label><input type="text" id="f_gov" value="${esc(state.school.governorate)}"></div>
+      </div>
+      <div class="footer-actions">
+        <span></span>
+        <button class="btn btn-primary" id="next">التالي: الأيام والحصص →</button>
+      </div>
+    </div>
+  `;
+  ['name','year','dir','gov'].forEach(k=>{
+    c.querySelector('#f_'+k).addEventListener('input', e=>{
+      const map={name:'name',year:'year',dir:'directorate',gov:'governorate'};
+      state.school[map[k]] = e.target.value; scheduleSave();
+    });
+  });
+  c.querySelector('#next').addEventListener('click', ()=>{ ui.step='days'; render(); });
+}
+
+/* ---------- DAYS & PERIODS ---------- */
+function renderDays(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2>أيام الدوام</h2>
+      <p class="sub">أضف أو احذف أياماً — لا يوجد عدد ثابت.</p>
+      <div class="chip-list" id="dayChips"></div>
+      <div class="row" style="margin-top:14px">
+        <div class="field" style="margin-bottom:0"><input type="text" id="newDay" placeholder="اسم اليوم (مثال: الجمعة)"></div>
+        <button class="btn btn-ghost btn-sm" id="addDay">إضافة يوم</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>الحصص الدراسية</h2>
+      <p class="sub">حدد عدد الحصص والفسح ومواقيتها. سيتم استبعاد الفسح من عملية الجدولة تلقائياً.</p>
+      <table class="list" id="periodTable"></table>
+      <button class="btn btn-ghost btn-sm" id="addPeriod" style="margin-top:10px">+ إضافة حصة / فسحة</button>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" id="prev">→ رجوع</button>
+      <button class="btn btn-primary" id="next">التالي: التخصصات والمواد ←</button>
+    </div>
+  `;
+  const chips = c.querySelector('#dayChips');
+  chips.innerHTML = state.days.map(d=>`<span class="chip">${esc(d.name)}<button data-id="${d.id}" class="delDay">×</button></span>`).join('') || '<span style="color:var(--ink-soft);font-size:13px">لا توجد أيام بعد.</span>';
+  chips.querySelectorAll('.delDay').forEach(b=> b.addEventListener('click', e=>{
+    state.days = state.days.filter(d=>d.id!==e.target.dataset.id); scheduleSave(); renderStep();
+  }));
+  c.querySelector('#addDay').addEventListener('click', ()=>{
+    const inp = c.querySelector('#newDay');
+    if(!inp.value.trim()) return;
+    state.days.push({id:uid('d'), name:inp.value.trim()}); scheduleSave(); renderStep();
+  });
+
+  const pt = c.querySelector('#periodTable');
+  function drawPeriods(){
+    pt.innerHTML = `<tr><th>الترتيب</th><th>التسمية</th><th>من</th><th>إلى</th><th>النوع</th><th></th></tr>` +
+      state.periods.map((p,i)=>`
+        <tr>
+          <td class="mono">${i+1}</td>
+          <td><input type="text" data-f="label" data-id="${p.id}" value="${esc(p.label)}" style="width:80px"></td>
+          <td><input type="time" data-f="start" data-id="${p.id}" value="${p.start}"></td>
+          <td><input type="time" data-f="end" data-id="${p.id}" value="${p.end}"></td>
+          <td>
+            <select data-f="type" data-id="${p.id}">
+              <option value="lesson" ${p.type==='lesson'?'selected':''}>حصة</option>
+              <option value="break" ${p.type==='break'?'selected':''}>فسحة</option>
+            </select>
+          </td>
+          <td><button class="icon-btn del" data-id="${p.id}">حذف</button></td>
+        </tr>`).join('');
+    pt.querySelectorAll('input,select').forEach(el=>{
+      el.addEventListener('input', e=>{
+        const p = state.periods.find(x=>x.id===e.target.dataset.id);
+        p[e.target.dataset.f] = e.target.value; scheduleSave();
+      });
+    });
+    pt.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
+      state.periods = state.periods.filter(p=>p.id!==e.target.dataset.id); scheduleSave(); drawPeriods();
+    }));
+  }
+  drawPeriods();
+  c.querySelector('#addPeriod').addEventListener('click', ()=>{
+    const n = state.periods.filter(p=>p.type==='lesson').length+1;
+    state.periods.push({id:uid('p'), label:String(n), start:'', end:'', type:'lesson'});
+    scheduleSave(); drawPeriods();
+  });
+  c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='school'; render(); });
+  c.querySelector('#next').addEventListener('click', ()=>{ ui.step='subjects'; render(); });
+}
+
+/* ---------- SPECIALIZATIONS & SUBJECTS ---------- */
+function renderSubjects(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2>التخصصات</h2>
+      <p class="sub">تُستخدم لربط كل معلم بالمواد التي يحق له تدريسها.</p>
+      <div class="chip-list" id="specChips"></div>
+      <div class="row" style="margin-top:14px">
+        <div class="field" style="margin-bottom:0"><input type="text" id="newSpec" placeholder="مثال: رياضيات"></div>
+        <button class="btn btn-ghost btn-sm" id="addSpec">إضافة تخصص</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>المواد الدراسية</h2>
+      <table class="list" id="subjTable"></table>
+      <fieldset style="margin-top:12px">
+        <legend>مادة جديدة</legend>
+        <div class="row">
+          <input type="text" id="newSubjName" placeholder="اسم المادة">
+          <select id="newSubjSpec"></select>
+          <button class="btn btn-ghost btn-sm" id="addSubj">إضافة</button>
+        </div>
+      </fieldset>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" id="prev">→ رجوع</button>
+      <button class="btn btn-primary" id="next">التالي: المعلمون ←</button>
+    </div>
+  `;
+  const specChips = c.querySelector('#specChips');
+  function drawSpecs(){
+    specChips.innerHTML = state.specializations.map(s=>`<span class="chip">${esc(s.name)}<button data-id="${s.id}" class="delSpec">×</button></span>`).join('') || '<span style="color:var(--ink-soft);font-size:13px">لا توجد تخصصات بعد.</span>';
+    specChips.querySelectorAll('.delSpec').forEach(b=> b.addEventListener('click', e=>{
+      state.specializations = state.specializations.filter(s=>s.id!==e.target.dataset.id); scheduleSave(); renderStep();
+    }));
+    const sel = c.querySelector('#newSubjSpec');
+    sel.innerHTML = state.specializations.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('') || '<option value="">أضف تخصصاً أولاً</option>';
+  }
+  drawSpecs();
+  c.querySelector('#addSpec').addEventListener('click', ()=>{
+    const inp = c.querySelector('#newSpec');
+    if(!inp.value.trim()) return;
+    state.specializations.push({id:uid('sp'), name:inp.value.trim()}); scheduleSave(); renderStep();
+  });
+
+  const st = c.querySelector('#subjTable');
+  function drawSubjects(){
+    st.innerHTML = `<tr><th>اللون</th><th>المادة</th><th>التخصص</th><th></th></tr>` +
+      state.subjects.map(s=>{
+        const sp = state.specializations.find(x=>x.id===s.specId);
+        return `<tr><td><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${s.color}"></span></td>
+          <td>${esc(s.name)}</td><td>${sp?esc(sp.name):'<span style="color:var(--danger)">غير محدد</span>'}</td>
+          <td><button class="icon-btn del" data-id="${s.id}">حذف</button></td></tr>`;
+      }).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:16px">لا توجد مواد بعد.</td></tr>`;
+    st.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
+      state.subjects = state.subjects.filter(s=>s.id!==e.target.dataset.id); scheduleSave(); drawSubjects();
+    }));
+  }
+  drawSubjects();
+  c.querySelector('#addSubj').addEventListener('click', ()=>{
+    const nameEl = c.querySelector('#newSubjName');
+    const specEl = c.querySelector('#newSubjSpec');
+    if(!nameEl.value.trim() || !specEl.value){ toast('أدخل اسم المادة واختر تخصصاً.'); return; }
+    state.subjects.push({id:uid('su'), name:nameEl.value.trim(), specId:specEl.value, color:SUBJECT_COLORS[state.subjects.length%SUBJECT_COLORS.length]});
+    nameEl.value=''; scheduleSave(); drawSubjects();
+  });
+  c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='days'; render(); });
+  c.querySelector('#next').addEventListener('click', ()=>{ ui.step='teachers'; render(); });
+}
+
+/* ---------- TEACHERS ---------- */
+function renderTeachers(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2>المعلمون</h2>
+      <p class="sub">حدد المواد التي يدرّسها كل معلم، الحد الأقصى للحصص يومياً، وأوقات عدم التوفر إن وجدت.</p>
+      <table class="list" id="teacherTable"></table>
+    </div>
+    <div class="panel">
+      <h2 style="font-size:15px">إضافة معلم</h2>
+      <div class="grid2">
+        <div class="field"><label>الاسم الكامل</label><input type="text" id="t_name"></div>
+        <div class="field"><label>الحد الأقصى للحصص يومياً</label><input type="number" id="t_max" value="6" min="1" max="12"></div>
+      </div>
+      <div class="field"><label>المواد التي يدرّسها</label>
+        <div class="chip-list" id="t_subjPicker"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="addTeacher">إضافة المعلم</button>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" id="prev">→ رجوع</button>
+      <button class="btn btn-primary" id="next">التالي: الصفوف والشعب ←</button>
+    </div>
+  `;
+  const picker = c.querySelector('#t_subjPicker');
+  let selectedSubjIds = new Set();
+  if(state.subjects.length===0){
+    picker.innerHTML = '<span style="font-size:12.5px;color:var(--danger)">أضف مواد أولاً من الخطوة السابقة.</span>';
+  } else {
+    picker.innerHTML = state.subjects.map(s=>`<label class="chip" style="cursor:pointer"><input type="checkbox" value="${s.id}" style="margin:0"> ${esc(s.name)}</label>`).join('');
+    picker.querySelectorAll('input').forEach(cb=> cb.addEventListener('change', e=>{
+      if(e.target.checked) selectedSubjIds.add(e.target.value); else selectedSubjIds.delete(e.target.value);
+    }));
+  }
+
+  const tt = c.querySelector('#teacherTable');
+  function drawTeachers(){
+    tt.innerHTML = `<tr><th>الاسم</th><th>المواد</th><th>الحد اليومي</th><th></th></tr>` +
+      state.teachers.map(t=>{
+        const subNames = t.subjectIds.map(id=> state.subjects.find(s=>s.id===id)?.name).filter(Boolean).join('، ');
+        return `<tr><td>${esc(t.name)}</td><td>${esc(subNames)||'—'}</td><td class="mono">${t.maxDaily}</td>
+          <td><button class="icon-btn del" data-id="${t.id}">حذف</button></td></tr>`;
+      }).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:16px">لا يوجد معلمون بعد.</td></tr>`;
+    tt.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
+      state.teachers = state.teachers.filter(t=>t.id!==e.target.dataset.id); scheduleSave(); drawTeachers();
+    }));
+  }
+  drawTeachers();
+
+  c.querySelector('#addTeacher').addEventListener('click', ()=>{
+    const name = c.querySelector('#t_name').value.trim();
+    const max = parseInt(c.querySelector('#t_max').value)||6;
+    if(!name){ toast('أدخل اسم المعلم.'); return; }
+    if(selectedSubjIds.size===0){ toast('اختر مادة واحدة على الأقل.'); return; }
+    const specIds = [...new Set([...selectedSubjIds].map(sid=> state.subjects.find(s=>s.id===sid)?.specId).filter(Boolean))];
+    state.teachers.push({ id:uid('t'), name, specIds, subjectIds:[...selectedSubjIds], maxDaily:max, unavailable:[], preferred:[] });
+    scheduleSave(); c.querySelector('#t_name').value=''; renderStep();
+  });
+  c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='subjects'; render(); });
+  c.querySelector('#next').addEventListener('click', ()=>{ ui.step='sections'; render(); });
+}
+
+/* ---------- SECTIONS ---------- */
+function renderSections(c){
+  c.innerHTML = `
+    <div class="panel">
+      <h2>الصفوف والشعب</h2>
+      <p class="sub">مثال: المرحلة "إعدادية" ← الصف "السادس العلمي" ← الشعبة "أ".</p>
+      <table class="list" id="secTable"></table>
+      <fieldset style="margin-top:12px">
+        <legend>شعبة جديدة</legend>
+        <div class="row">
+          <input type="text" id="s_stage" placeholder="المرحلة (مثال: إعدادية)">
+          <input type="text" id="s_grade" placeholder="الصف (مثال: السادس العلمي)">
+          <input type="text" id="s_name" placeholder="الشعبة (مثال: أ)">
+          <button class="btn btn-ghost btn-sm" id="addSec">إضافة</button>
+        </div>
+      </fieldset>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" id="prev">→ رجوع</button>
+      <button class="btn btn-primary" id="next">التالي: متطلبات المواد ←</button>
+    </div>
+  `;
+  const st = c.querySelector('#secTable');
+  function draw(){
+    st.innerHTML = `<tr><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th></th></tr>` +
+      state.sections.map(s=>`<tr><td>${esc(s.stage)}</td><td>${esc(s.grade)}</td><td>${esc(s.name)}</td>
+        <td><button class="icon-btn del" data-id="${s.id}">حذف</button></td></tr>`).join('') ||
+      `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:16px">لا توجد شعب بعد.</td></tr>`;
+    st.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
+      state.sections = state.sections.filter(s=>s.id!==e.target.dataset.id); scheduleSave(); draw();
+    }));
+  }
+  draw();
+  c.querySelector('#addSec').addEventListener('click', ()=>{
+    const stage=c.querySelector('#s_stage').value.trim(), grade=c.querySelector('#s_grade').value.trim(), name=c.querySelector('#s_name').value.trim();
+    if(!grade||!name){ toast('أدخل الصف والشعبة على الأقل.'); return; }
+    state.sections.push({id:uid('sec'), stage, grade, name});
+    scheduleSave(); ['s_stage','s_grade','s_name'].forEach(id=>c.querySelector('#'+id).value=''); draw();
+  });
+  c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='teachers'; render(); });
+  c.querySelector('#next').addEventListener('click', ()=>{ ui.step='requirements'; render(); });
+}
+
+/* ---------- REQUIREMENTS ---------- */
+function renderRequirements(c){
+  if(state.sections.length===0 || state.subjects.length===0 || state.teachers.length===0){
+    c.innerHTML = `<div class="panel"><div class="empty">أضف الشعب والمواد والمعلمين أولاً قبل تحديد المتطلبات.</div>
+      <div class="footer-actions" style="margin-top:14px"><button class="btn btn-ghost" id="prev">→ رجوع</button><span></span></div></div>`;
+    c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='sections'; render(); });
+    return;
+  }
+  c.innerHTML = `
+    <div class="panel">
+      <h2>متطلبات المواد لكل شعبة</h2>
+      <p class="sub">حدد عدد الحصص الأسبوعية المطلوبة لكل مادة، والمعلم المسؤول عنها.</p>
+      <div class="field"><label>اختر الشعبة</label><select id="secPick"></select></div>
+      <table class="list" id="reqTable"></table>
+      <fieldset style="margin-top:12px">
+        <legend>متطلب جديد</legend>
+        <div class="row">
+          <select id="r_subj"></select>
+          <select id="r_teacher"></select>
+          <input type="number" id="r_count" placeholder="حصص/أسبوع" min="1" max="20" value="4" style="max-width:110px">
+          <button class="btn btn-ghost btn-sm" id="addReq">إضافة</button>
+        </div>
+      </fieldset>
+      <div id="totalRow" style="font-size:13px;color:var(--ink-soft);margin-top:8px"></div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" id="prev">→ رجوع</button>
+      <button class="btn btn-primary" id="next">التالي: توليد الجدول ←</button>
+    </div>
+  `;
+  const secPick = c.querySelector('#secPick');
+  secPick.innerHTML = state.sections.map(s=>`<option value="${s.id}">${esc(s.grade)} — ${esc(s.name)}</option>`).join('');
+  if(!ui.reqSectionId || !state.sections.find(s=>s.id===ui.reqSectionId)) ui.reqSectionId = state.sections[0].id;
+  secPick.value = ui.reqSectionId;
+  secPick.addEventListener('change', e=>{ ui.reqSectionId = e.target.value; drawReq(); });
+
+  const subjSel = c.querySelector('#r_subj');
+  subjSel.innerHTML = state.subjects.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  const teacherSel = c.querySelector('#r_teacher');
+  function refreshTeacherOptions(){
+    const subjId = subjSel.value;
+    const eligible = state.teachers.filter(t=> t.subjectIds.includes(subjId));
+    teacherSel.innerHTML = eligible.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('') ||
+      `<option value="">لا يوجد معلم لهذه المادة</option>`;
+  }
+  subjSel.addEventListener('change', refreshTeacherOptions);
+  refreshTeacherOptions();
+
+  const rt = c.querySelector('#reqTable');
+  function drawReq(){
+    secPick.value = ui.reqSectionId;
+    const list = state.requirements.filter(r=>r.sectionId===ui.reqSectionId);
+    rt.innerHTML = `<tr><th>المادة</th><th>المعلم</th><th>حصص/أسبوع</th><th></th></tr>` +
+      list.map(r=>{
+        const subj = state.subjects.find(s=>s.id===r.subjectId);
+        const teach = state.teachers.find(t=>t.id===r.teacherId);
+        return `<tr><td>${subj?esc(subj.name):'—'}</td><td>${teach?esc(teach.name):'<span style="color:var(--danger)">غير محدد</span>'}</td>
+          <td class="mono">${r.weeklyCount}</td><td><button class="icon-btn del" data-id="${r.id}">حذف</button></td></tr>`;
+      }).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:16px">لا توجد متطلبات لهذه الشعبة بعد.</td></tr>`;
+    rt.querySelectorAll('.del').forEach(b=> b.addEventListener('click', e=>{
+      state.requirements = state.requirements.filter(r=>r.id!==e.target.dataset.id); scheduleSave(); drawReq();
+    }));
+    const total = list.reduce((s,r)=>s+(parseInt(r.weeklyCount)||0),0);
+    const lessonPeriodsPerWeek = state.periods.filter(p=>p.type==='lesson').length * state.days.length;
+    c.querySelector('#totalRow').textContent = `إجمالي الحصص المطلوبة: ${total} من أصل ${lessonPeriodsPerWeek} فرصة متاحة أسبوعياً.`;
+  }
+  drawReq();
+
+  c.querySelector('#addReq').addEventListener('click', ()=>{
+    const subjectId = subjSel.value, teacherId = teacherSel.value, count = parseInt(c.querySelector('#r_count').value)||0;
+    if(!subjectId || !teacherId){ toast('اختر مادة ومعلماً صالحاً لها.'); return; }
+    if(count<1){ toast('أدخل عدد حصص صحيح.'); return; }
+    const existing = state.requirements.find(r=>r.sectionId===ui.reqSectionId && r.subjectId===subjectId);
+    if(existing){ existing.teacherId=teacherId; existing.weeklyCount=count; }
+    else state.requirements.push({id:uid('req'), sectionId:ui.reqSectionId, subjectId, teacherId, weeklyCount:count});
+    scheduleSave(); drawReq();
+  });
+  c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='sections'; render(); });
+  c.querySelector('#next').addEventListener('click', ()=>{ ui.step='generate'; render(); });
+}
+
+/* ---------- GENERATE ---------- */
+function renderGenerate(c){
+  const ready = state.sections.length>0 && state.requirements.length>0 && state.days.length>0 &&
+    state.periods.filter(p=>p.type==='lesson').length>0;
+  c.innerHTML = `
+    <div class="panel">
+      <h2>توليد الجدول تلقائياً</h2>
+      <p class="sub">يقوم المحرك بمحاولة تعيين كل الحصص المطلوبة مع احترام تعارضات المعلمين والشعب، ثم يحسّن التوزيع عبر بحث محلي.</p>
+      ${!ready ? '<div class="empty">أكمل بيانات الشعب والمتطلبات أولاً.</div>' : `
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-accent" id="genBtn">⚙ توليد الجدول</button>
+          <button class="btn btn-ghost" id="regenBtn" ${!state.timetable?'disabled':''}>إعادة التوليد (نتيجة بديلة)</button>
+        </div>
+      `}
+      <div id="genResult"></div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" id="prev">→ رجوع</button>
+      <button class="btn btn-primary" id="next" ${!state.timetable?'disabled':''}>عرض الجدول الأسبوعي ←</button>
+    </div>
+  `;
+  function runGen(){
+    const btn = c.querySelector('#genBtn');
+    if(btn){ btn.textContent='...جارِ الحساب'; btn.disabled=true; }
+    setTimeout(()=>{
+      state.timetable = generateTimetable(state);
+      scheduleSave();
+      renderStep();
+      toast('تم توليد الجدول.');
+    }, 30);
+  }
+  const genBtn = c.querySelector('#genBtn');
+  if(genBtn) genBtn.addEventListener('click', runGen);
+  const regenBtn = c.querySelector('#regenBtn');
+  if(regenBtn) regenBtn.addEventListener('click', runGen);
+
+  if(state.timetable){
+    const sc = state.timetable.score;
+    const gr = c.querySelector('#genResult');
+    gr.innerHTML = `
+      <div class="score-grid">
+        <div class="score-card ${sc.overall>=85?'good':(sc.overall<60?'bad':'')}"><div class="val">${sc.overall}%</div><div class="lbl">الجودة الإجمالية</div></div>
+        <div class="score-card ${sc.teacherConflicts>0?'bad':'good'}"><div class="val">${sc.teacherConflicts}</div><div class="lbl">تعارضات المعلمين</div></div>
+        <div class="score-card ${sc.sectionConflicts>0?'bad':'good'}"><div class="val">${sc.sectionConflicts}</div><div class="lbl">تعارضات الشعب</div></div>
+        <div class="score-card ${sc.unassignedCount>0?'bad':'good'}"><div class="val">${sc.unassignedCount}</div><div class="lbl">حصص غير معينة</div></div>
+        <div class="score-card"><div class="val">${sc.teacherGaps}</div><div class="lbl">فجوات المعلمين</div></div>
+        <div class="score-card"><div class="val">${sc.preferencePct}%</div><div class="lbl">تحقق التفضيلات</div></div>
+      </div>
+      ${state.timetable.unassigned.length>0 ? `
+        <div class="unassigned-box">
+          <h3>لم يتم توليد جدول كامل — حصص غير معينة (${state.timetable.unassigned.length})</h3>
+          <ul>${state.timetable.unassigned.map(u=>{
+            const subj = state.subjects.find(s=>s.id===u.subjectId);
+            const sec = state.sections.find(s=>s.id===u.sectionId);
+            return `<li>${sec?esc(sec.grade+' — '+sec.name):''} · ${subj?esc(subj.name):''} — ${esc(u.reason)}</li>`;
+          }).join('')}</ul>
+          <div class="hint-box">حلول مقترحة: زد عدد أيام/حصص توفر المعلم، أضف معلماً إضافياً لنفس المادة، أو قلّل عدد الحصص الأسبوعية المطلوبة.</div>
+        </div>` : ''}
+    `;
+  }
+  c.querySelector('#prev').addEventListener('click', ()=>{ ui.step='requirements'; render(); });
+  const next = c.querySelector('#next');
+  if(next) next.addEventListener('click', ()=>{ ui.step='timetable'; render(); });
+}
+
+/* ---------- TIMETABLE VIEW + MANUAL EDIT + EXPORT ---------- */
+function renderTimetable(c){
+  if(!state.timetable){
+    c.innerHTML = `<div class="panel"><div class="empty">لم يتم توليد جدول بعد.</div>
+      <div class="footer-actions" style="margin-top:14px"><span></span><button class="btn btn-primary" id="toGen">الذهاب لتوليد الجدول ←</button></div></div>`;
+    c.querySelector('#toGen').addEventListener('click', ()=>{ ui.step='generate'; render(); });
+    return;
+  }
+  if(!ui.ttView){ ui.ttView = 'school'; }
+  if(ui.ttView!=='school' && !ui.ttViewId){
+    if(state.sections[0]){ ui.ttView='section'; ui.ttViewId=state.sections[0].id; }
+  }
+  c.innerHTML = `
+    <div class="panel no-print">
+      <h2>الجدول الأسبوعي</h2>
+      <div class="view-tabs" id="viewModeTabs">
+        <div class="view-tab ${ui.ttView==='school'?'active':''}" data-m="school">كل المدرسة</div>
+        <div class="view-tab ${ui.ttView==='section'?'active':''}" data-m="section">حسب الشعبة</div>
+        <div class="view-tab ${ui.ttView==='teacher'?'active':''}" data-m="teacher">حسب المعلم</div>
+      </div>
+      ${ui.ttView!=='school' ? `<div class="field" style="max-width:340px"><select id="entityPick"></select></div>` : ''}
+      <div class="hint-box">${ui.ttView==='school'
+        ? 'هذا عرض لجداول جميع الشعب مجتمعة، مخصص للمراجعة والطباعة. للتعديل اليدوي، افتح "حسب الشعبة" أو "حسب المعلم".'
+        : 'اضغط على أي حصة لتحديدها، ثم اضغط على خانة أخرى لمبادلة الحصتين. سيتم التحقق من التعارضات تلقائياً.'}</div>
+    </div>
+    <div class="panel" style="padding-top:0">
+      <div class="print-only">
+        <div class="p-school">${esc(state.school.name || 'الجدول الأسبوعي')}</div>
+        <div class="p-meta">${[state.school.directorate, state.school.governorate, state.school.year].filter(Boolean).join(' — ')}</div>
+      </div>
+      <div class="tt-wrap" id="ttWrap"></div>
+    </div>
+    <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="printBtn">🖨 طباعة / تصدير PDF</button>
+      <button class="btn btn-ghost" id="csvBtn">⬇ تصدير Excel (CSV)</button>
+      <button class="btn btn-ghost" id="backGen">→ رجوع لنتائج التوليد</button>
+    </div>
+  `;
+  const tabs = c.querySelectorAll('#viewModeTabs .view-tab');
+  tabs.forEach(t=> t.addEventListener('click', ()=>{
+    ui.ttView = t.dataset.m;
+    if(ui.ttView==='school'){ ui.ttViewId = null; }
+    else { ui.ttViewId = ui.ttView==='section' ? (state.sections[0]?.id) : (state.teachers[0]?.id); }
+    ui.selectedCell = null;
+    renderStep();
+  }));
+  const pick = c.querySelector('#entityPick');
+  if(pick){
+    const options = ui.ttView==='section' ? state.sections.map(s=>({id:s.id,label:`${s.grade} — ${s.name}`})) :
+      state.teachers.map(t=>({id:t.id,label:t.name}));
+    pick.innerHTML = options.map(o=>`<option value="${o.id}">${esc(o.label)}</option>`).join('') || '<option>—</option>';
+    if(ui.ttViewId) pick.value = ui.ttViewId;
+    pick.addEventListener('change', e=>{ ui.ttViewId = e.target.value; ui.selectedCell=null; renderStep(); });
+  }
+
+  if(ui.ttView==='school') drawSchoolGrid(c.querySelector('#ttWrap'));
+  else drawGrid(c.querySelector('#ttWrap'));
+
+  c.querySelector('#printBtn').addEventListener('click', ()=>{
+    if(ui.ttView==='school') applyPrintFit();
+    window.print();
+  });
+  c.querySelector('#csvBtn').addEventListener('click', exportCSV);
+  c.querySelector('#backGen').addEventListener('click', ()=>{ ui.step='generate'; render(); });
+}
+
+function drawGrid(wrap){
+  const lessonPeriods = state.periods.filter(p=>p.type==='lesson' || p.type==='break');
+  let entries = state.timetable.entries;
+  if(ui.ttView==='section') entries = entries.filter(e=>e.sectionId===ui.ttViewId);
+  else entries = entries.filter(e=>e.teacherId===ui.ttViewId);
+
+  let html = `<table class="tt"><thead><tr><th>الحصة</th>${state.days.map(d=>`<th>${esc(d.name)}</th>`).join('')}</tr></thead><tbody>`;
+  lessonPeriods.forEach(p=>{
+    html += `<tr><td class="period-col"><span class="num">${esc(p.label)}</span>${p.start?esc(p.start)+'–'+esc(p.end):''}</td>`;
+    state.days.forEach(d=>{
+      if(p.type==='break'){ html += `<td class="cell-break">فسحة</td>`; return; }
+      const entry = entries.find(e=>e.dayId===d.id && e.periodId===p.id);
+      const cellId = d.id+'::'+p.id;
+      const isSelected = ui.selectedCell===cellId;
+      if(entry){
+        const subj = state.subjects.find(s=>s.id===entry.subjectId);
+        const teach = state.teachers.find(t=>t.id===entry.teacherId);
+        const secLabel = ui.ttView==='teacher' ? (state.sections.find(s=>s.id===entry.sectionId)||{}).name : '';
+        html += `<td>
+          <div class="cell-lesson ${isSelected?'selected':''} ${entry.manual?'manual':''}" style="--subj:${subj?subj.color:'#999'}" data-cell="${cellId}" data-entry="${entry.id}">
+            <span class="subj">${subj?esc(subj.name):'—'}</span>
+            <span class="teach">${ui.ttView==='teacher' ? esc(secLabel) : (teach?esc(teach.name):'')}</span>
+          </div>
+        </td>`;
+      } else {
+        html += `<td><div class="cell-empty ${isSelected?'selected':''}" data-cell="${cellId}">—</div></td>`;
+      }
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('[data-cell]').forEach(el=>{
+    el.addEventListener('click', ()=> onCellClick(el.dataset.cell));
+  });
+}
+
+function drawSchoolGrid(wrap){
+  if(state.sections.length===0){ wrap.innerHTML = '<div class="empty">لا توجد شعب بعد.</div>'; return; }
+  const lessonPeriods = state.periods.filter(p=>p.type==='lesson' || p.type==='break');
+  const sections = state.sections;
+
+  let html = `<table class="tt master">
+    <thead><tr><th class="day-col-h">اليوم</th><th>الحصة</th>${sections.map(s=>`<th>${esc(s.grade)}<br><span style="font-weight:400;opacity:.85">${esc(s.name)}</span></th>`).join('')}</tr></thead>
+    <tbody>`;
+
+  state.days.forEach(d=>{
+    lessonPeriods.forEach((p, pi)=>{
+      html += `<tr>`;
+      if(pi===0){ html += `<td class="day-col" rowspan="${lessonPeriods.length}">${esc(d.name)}</td>`; }
+      html += `<td class="period-col"><span class="num">${esc(p.label)}</span>${p.start?esc(p.start)+'–'+esc(p.end):''}</td>`;
+      if(p.type==='break'){
+        html += `<td class="cell-break" colspan="${sections.length}">فسحة</td>`;
+      } else {
+        sections.forEach(sec=>{
+          const entry = state.timetable.entries.find(e=>e.sectionId===sec.id && e.dayId===d.id && e.periodId===p.id);
+          if(entry){
+            const subj = state.subjects.find(s=>s.id===entry.subjectId);
+            const teach = state.teachers.find(t=>t.id===entry.teacherId);
+            html += `<td>
+              <div class="cell-lesson-plain ${entry.manual?'manual':''}">
+                ${subj?esc(subj.name):'—'} / ${teach?esc(teach.name):''}
+              </div>
+            </td>`;
+          } else {
+            html += `<td><div class="cell-empty">/////</div></td>`;
+          }
+        });
+      }
+      html += `</tr>`;
+    });
+  });
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+function onCellClick(cellId){
+  if(!ui.selectedCell){ ui.selectedCell = cellId; renderTimetable(document.getElementById('content')); return; }
+  if(ui.selectedCell===cellId){ ui.selectedCell=null; renderTimetable(document.getElementById('content')); return; }
+  attemptSwap(ui.selectedCell, cellId);
+}
+
+function attemptSwap(cellA, cellB){
+  const [dayA,perA] = cellA.split('::');
+  const [dayB,perB] = cellB.split('::');
+  const entries = state.timetable.entries;
+  const entryA = entries.find(e=> e.dayId===dayA && e.periodId===perA && (ui.ttView==='section'?e.sectionId===ui.ttViewId:e.teacherId===ui.ttViewId));
+  const entryB = entries.find(e=> e.dayId===dayB && e.periodId===perB && (ui.ttView==='section'?e.sectionId===ui.ttViewId:e.teacherId===ui.ttViewId));
+
+  if(!entryA){ ui.selectedCell = cellB; renderTimetable(document.getElementById('content')); return; }
+
+  function wouldConflict(entry, dayId, periodId, excludeId){
+    return entries.some(o=> o.id!==excludeId && o.id!==(entryB?entryB.id:null) &&
+      o.dayId===dayId && o.periodId===periodId &&
+      (o.teacherId===entry.teacherId || o.sectionId===entry.sectionId));
+  }
+
+  const conflictA = wouldConflict(entryA, dayB, perB, entryA.id);
+  const conflictB = entryB ? wouldConflict(entryB, dayA, perA, entryB.id) : false;
+  const teacherA = state.teachers.find(t=>t.id===entryA.teacherId);
+  const unavailA = teacherA && teacherUnavailable(teacherA, dayB, perB);
+
+  if(conflictA || conflictB || unavailA){
+    showModal(`
+      <h3>⚠️ تعارض محتمل</h3>
+      <p>هذا التبديل سيتسبب بتعارض (نفس المعلم أو نفس الشعبة في وقت واحد${unavailA?'، أو المعلم غير متاح في هذا الوقت':''}). هل تريد المتابعة رغم ذلك وتمييز الحصة كتعديل يدوي؟</p>
+      <div class="actions">
+        <button class="btn btn-ghost btn-sm" id="mCancel">إلغاء</button>
+        <button class="btn btn-danger btn-sm" id="mOverride">تجاوز يدوياً</button>
+      </div>
+    `);
+    document.getElementById('mCancel').addEventListener('click', ()=>{ closeModal(); ui.selectedCell=null; renderTimetable(document.getElementById('content')); });
+    document.getElementById('mOverride').addEventListener('click', ()=>{
+      doSwap(entryA, entryB, dayA, perA, dayB, perB, true);
+      closeModal();
+    });
+    return;
+  }
+  doSwap(entryA, entryB, dayA, perA, dayB, perB, false);
+}
+
+function doSwap(entryA, entryB, dayA, perA, dayB, perB, manual){
+  entryA.dayId = dayB; entryA.periodId = perB; entryA.manual = manual;
+  if(entryB){ entryB.dayId = dayA; entryB.periodId = perA; entryB.manual = manual; }
+  state.timetable.score = scoreTimetable(state, state.timetable.entries, state.timetable.unassigned);
+  ui.selectedCell = null;
+  scheduleSave();
+  render();
+  toast(manual ? 'تم التبديل مع تمييزه كتعديل يدوي.' : 'تم تبديل الحصتين.');
+}
+
+/* ---------- EXPORT CSV ---------- */
+function exportCSV(){
+  const lessonPeriods = state.periods.filter(p=>p.type==='lesson' || p.type==='break');
+  const rows = [];
+
+  if(ui.ttView==='school'){
+    rows.push(['اليوم','الحصة', ...state.sections.map(s=>`${s.grade} - ${s.name}`)]);
+    state.days.forEach(d=>{
+      lessonPeriods.forEach(p=>{
+        const row = [d.name, p.label];
+        if(p.type==='break'){ row.push(...state.sections.map(()=>'فسحة')); }
+        else{
+          state.sections.forEach(sec=>{
+            const entry = state.timetable.entries.find(e=>e.sectionId===sec.id && e.dayId===d.id && e.periodId===p.id);
+            if(!entry){ row.push(''); return; }
+            const subj = state.subjects.find(s=>s.id===entry.subjectId);
+            const teach = state.teachers.find(t=>t.id===entry.teacherId);
+            row.push(`${subj?subj.name:''} - ${teach?teach.name:''}`);
+          });
+        }
+        rows.push(row);
+      });
+    });
+  } else {
+    function appendBlock(title, entries){
+      rows.push([title]);
+      rows.push(['الحصة', ...state.days.map(d=>d.name)]);
+      lessonPeriods.forEach(p=>{
+        const row = [p.label];
+        state.days.forEach(d=>{
+          if(p.type==='break'){ row.push('فسحة'); return; }
+          const entry = entries.find(e=>e.dayId===d.id && e.periodId===p.id);
+          if(!entry){ row.push(''); return; }
+          const subj = state.subjects.find(s=>s.id===entry.subjectId);
+          const teach = state.teachers.find(t=>t.id===entry.teacherId);
+          row.push(`${subj?subj.name:''} - ${teach?teach.name:''}`);
+        });
+        rows.push(row);
+      });
+    }
+    let entries = state.timetable.entries;
+    entries = ui.ttView==='section' ? entries.filter(e=>e.sectionId===ui.ttViewId) : entries.filter(e=>e.teacherId===ui.ttViewId);
+    appendBlock('الجدول الأسبوعي', entries);
+  }
+
+  const csv = '\uFEFF' + rows.map(r=> r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'جدول-اسبوعي.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('تم تصدير الملف.');
+}
+
+function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+document.getElementById('modalOverlay').addEventListener('click', e=>{
+  if(e.target.id==='modalOverlay') closeModal();
+});
+
+(async function init(){
+  await loadState();
+  render();
+})();
+</script>
+</body>
+</html>
