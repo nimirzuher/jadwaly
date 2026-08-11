@@ -828,11 +828,10 @@ function renderAdSlot(position, label){
   const cfg = AD_CONFIG.slots[position];
   if(AD_CONFIG.enabled && AD_CONFIG.provider==='adsense' && AD_CONFIG.client && cfg && cfg.id){
     // Real AdSense unit — Google's script tag must already be loaded in <head> with AD_CONFIG.client.
-    return `<div class="ad-slot no-print" data-ad-position="${position}">
-      <ins class="adsbygoogle" style="display:block" data-ad-client="${esc(AD_CONFIG.client)}"
-        data-ad-slot="${esc(cfg.id)}" data-ad-format="${esc(cfg.format||'auto')}" data-full-width-responsive="true"></ins>
-    </div>`;
-  }
+   return `<div class="ad-slot no-print" data-ad-position="${position}">
+    <iframe src="https://www.highperformanceformat.com/watch?key=e099c9500ea09fe642192b289005b66c" width="728" height="90" frameborder="0" scrolling="no"></iframe>
+</div>`;
+}
   // Placeholder (default): shows where the ad will sit without calling any external network.
   return `<div class="ad-slot ad-placeholder no-print" data-ad-position="${position}">
     <span class="ad-tag">مساحة إعلانية</span>
